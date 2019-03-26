@@ -6,7 +6,7 @@ function genSettings = configs1()
     genSettings.C = -1*ones(9,1);%RLC's capacitance (-1=use data from .mat)
     genSettings.MAX_ACT_POWER = 200;%W
     genSettings.MAX_APP_POWER = 20000;%W
-    genSettings.TOTAL_TIME = 6000;%seconds of simulation (virtual time)
+    genSettings.TOTAL_TIME = 18000;%seconds of simulation (virtual time)=5h
     genSettings.power_m = 0.5;%consumption (W)
     genSettings.minV = 2.3;%minimal voltage to operate
     genSettings.minVTO = 3.3;%minimal voltage to turn on

@@ -3,8 +3,8 @@
 %the desired set of parameters
 %-fileInstance: number of the correct envList file inside the folder defined in 
 %configFile
-%version: year of your matlab version (numeric)
-function simulate(version, appName, paramFile, configFile, fileInstance)
+%-version: year of your matlab version (numeric)
+function LOG = simulate(version, appName, paramFile, configFile, fileInstance, plotChart)
     disp('Reminding: Please be sure that the workspace is clean (use clear all)');
     
     conf = eval(configFile);
@@ -75,14 +75,16 @@ function simulate(version, appName, paramFile, configFile, fileInstance)
 		A_RF,N_SWIPT,N_RF);
 
     %VISUALIZATION
-        
+    LOG = []; 
     for i=1:length(LOG_dev_list)
-        LOG = endDataAquisition(LOG_dev_list(i));
-        if(version <= 2010)
-            plotBatteryChart2010(LOG);
-        else
-            plotBatteryChart(LOG);
-        end
+        LOG = [LOG, endDataAquisition(LOG_dev_list(i))];
+		if plotChart
+        	if(version <= 2010)
+            	plotBatteryChart2010(LOG(i));
+        	else
+            	plotBatteryChart(LOG(i));
+        	end
+		end
     end
 
 end
