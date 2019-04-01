@@ -15,6 +15,13 @@ function [powerTX, powerRX] = appBuilder(appName, paramFile, NRX)
 			for i=1:NRX
 				powerRX = [powerRX, struct('obj',powerRXApplication(i))];
 			end
+		case 'optimum'
+			%this application calculates and applies the optimum voltages for a given timeSkip
+			powerTX = optimum_tx(param.timeSkip);
+			powerRX = [];
+			for i=1:NRX
+				powerRX = [powerRX, struct('obj',powerRXApplication(i))];
+			end
 		otherwise
 			disp('Unknown application');
 	end
