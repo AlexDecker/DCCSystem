@@ -17,13 +17,8 @@ function generateData(appName, paramFile, configFile, fileInstances, nRepetition
 			for d=1:length(LOG)
 				if(isempty(devData(d).CC))%first data set
 					devData(d).CC = LOG(d).CC;
-					plot(LOG(d).CC(2,:),LOG(d).CC(1,:));
-					figure;
 					devData(d).VB = LOG(d).VB;
-					plot(LOG(d).VB(2,:),LOG(d).VB(1,:));
-					figure;
 					devData(d).SOC = LOG(d).SOC;
-					plot(LOG(d).SOC(2,:),LOG(d).SOC(1,:));
 				else
 					%adjust the temporal series and then sum the new data and the accumulator	
 					CC = LOG(d).CC;
@@ -42,9 +37,9 @@ function generateData(appName, paramFile, configFile, fileInstances, nRepetition
 	num = length(fileInstances)*nRepetitions;
 
 	for d=1:conf.NRX
-		devData(d).CC(:,1) = devData(d).CC(:,1)./num;
-		devData(d).VB(:,1) = devData(d).VB(:,1)./num;
-		devData(d).SOC(:,1) = devData(d).SOC(:,1)./num;
+		devData(d).CC(1,:) = devData(d).CC(1,:)./num;
+		devData(d).VB(1,:) = devData(d).VB(1,:)./num;
+		devData(d).SOC(1,:) = devData(d).SOC(1,:)./num;
 	end
 
 	save(output, 'devData');
