@@ -2,20 +2,23 @@
 %all the charging processes given a 'timeSkip' discretization interval
 classdef optimum_tx < powerTXApplication
     properties
+		Pmax%max active power to be used
         timeSkip
 		count
         voltage_progression%matriz in which each column corresponds to the vt vector at each moment
     end
     methods
-        function obj = optimum_tx(timeSkip)
+        function obj = optimum_tx(Pmax,timeSkip)
             obj@powerTXApplication();%building superclass structure
+			obj.Pmax = Pmax;
             obj.timeSkip = timeSkip;
 			obj.count = 1;
         end
 
         function [obj,netManager,WPTManager] = init(obj,netManager,WPTManager)
 			%calculate the optimization voltages
-			obj.voltage_progression = calc_optimum_voltages(WPTManager,obj.timeSkip);
+			[t,obj.voltage_progression] = calc_optimum_voltages(WPTManager,obj.Pmax,obj.timeSkip);
+			disp(['Expected finishing moment: ',num2str(t),', time: ',num2str(t*obj.timeSkip/60),'min']);
 			%apply the calculated voltages
             [obj,WPTManager] = applyVoltages(obj,0,WPTManager);
 			netManager = setTimer(obj,netManager,0,obj.timeSkip);%begin the time events

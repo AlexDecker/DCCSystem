@@ -5,11 +5,11 @@ function genSettings = configs1()
     genSettings.R = 0.5*ones(9,1);%RLCs resistance
     genSettings.C = -1*ones(9,1);%RLC's capacitance (-1=use data from .mat)
     genSettings.MAX_ACT_POWER = 600;%W
-    genSettings.MAX_APP_POWER = 20000;%W
-    genSettings.TOTAL_TIME = 18000;%seconds of simulation (virtual time)=5h
-    genSettings.power_m = 0.5;%consumption (W)
+    genSettings.MAX_APP_POWER = 60000;%W
+    genSettings.TOTAL_TIME = 18000000;%18000;%seconds of simulation (virtual time)=5h
+    genSettings.power_m = 0;%consumption (W)
     genSettings.minV = 2.3;%minimal voltage to operate
     genSettings.minVTO = 3.3;%minimal voltage to turn on
     genSettings.efficiency = 0.95;%ACDC conversion
-    genSettings.envFolder = 'mobData1';%the folder containing the envList files
+    genSettings.envFolder = 'mobData2';%the folder containing the envList files
 end

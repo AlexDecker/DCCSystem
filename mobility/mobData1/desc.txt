@@ -1,2 +1,2 @@
 Based on simpleTracking file.
-Grid 2x3; 3 receivers; 2m of side length for the box; maximum velocity of 0.2m/frame; 15 frames
+Grid 2x3; 3 receivers; 1m of side length for the box; maximum velocity of 0.2m/frame; 15 frames
