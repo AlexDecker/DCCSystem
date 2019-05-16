@@ -12,7 +12,7 @@ generateData("dummie", "params1", "configs1", [1,2,3,4,5,6,7,8,9,10], 10)
 ```
 Exemple of plotting comparative charts torward the files bla.mat, ble.mat and bli.mat (using cell array)
 ```Matlab
-plotComparativeData({'bla.mat','ble.mat','bli.mat')
+plotComparativeData({'bla.mat','ble.mat','bli.mat'})
 ```
 
 # Implemented systems/protocols/applications
