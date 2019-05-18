@@ -22,6 +22,13 @@ function [powerTX, powerRX] = appBuilder(appName, paramFile, NRX)
 			for i=1:NRX
 				powerRX = [powerRX, struct('obj',powerRXApplication(i))];
 			end
+		case 'multispot'
+			%see "Wireless Power Hotspot that Charges All of Your Devices", Shi at al.
+			powerTX = multiSpot_tx(param.timeSkip,param.Pmax);
+			powerRX = [];
+			for i=1:NRX
+				powerRX = [powerRX, struct('obj',powerRXApplication(i))];
+			end
 		otherwise
 			disp('Unknown application');
 	end
