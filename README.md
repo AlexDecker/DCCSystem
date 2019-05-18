@@ -14,6 +14,11 @@ Exemple of plotting comparative charts torward the files bla.mat, ble.mat and bl
 ```Matlab
 plotComparativeData({'bla.mat','ble.mat','bli.mat'})
 ```
+Executing a simulation for MultiSpot system
+
+```Matlab
+simulate(2018,'multispot','params_MultiSpot','configs2',1,true)
+```
 
 ## Implemented systems/protocols/applications
  * dummie: uses random voltage vectors
