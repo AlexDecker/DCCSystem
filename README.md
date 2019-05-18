@@ -1,7 +1,7 @@
 # DCCSystem
 DCC - Do not Carry Cables system. It's a distributed algorithm for controlling a wireless power transfet network. It's implemented using sdWPTSimulator (https://github.com/AlexDecker/sdWPT-Simulator)
 
-# Usage
+## Usage
 Open the MATLAB environment and type 
 ```Matlab
 start
@@ -15,10 +15,10 @@ Exemple of plotting comparative charts torward the files bla.mat, ble.mat and bl
 plotComparativeData({'bla.mat','ble.mat','bli.mat'})
 ```
 
-# Implemented systems/protocols/applications
+## Implemented systems/protocols/applications
  * dummie: uses random voltage vectors
 
-# About the directory structure and files
+## About the directory structure and files
 
  * "Configs" foder contains functions that defines some configurations regarding the environment and devices
 
