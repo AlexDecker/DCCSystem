@@ -20,7 +20,7 @@ classdef omniMultiSpot_tx < powerTXApplication
 
         function [obj,netManager,WPTManager] = init(obj,netManager,WPTManager)
 			%Getting the parammeters (omniscient agent)
-			[Zt,Rt,~,Y] = getParammeters(obj,WPTManager);
+			[Zt,~,Rt,~,~,Y] = getParammeters(obj,WPTManager);
 
 			%The first iteraction (expected bad results)
 			[obj,Itbf] = calculateBeamFormingCurrents(obj,Zt,Rt,Y);
@@ -40,7 +40,10 @@ classdef omniMultiSpot_tx < powerTXApplication
 
         function [obj,netManager,WPTManager] = handleTimer(obj,GlobalTime,netManager,WPTManager)
 			%Getting the parammeters (omniscient agent)
-			[Zt,Rt,~,Y] = getParammeters(obj,WPTManager);
+			[Zt,Zr,Rt,Rr,wM,Y] = getParammeters(obj,WPTManager);
+
+			%prints omniscient information about the charging procedure
+			evaluateEstimations(obj,WPTManager,GlobalTime,Zt,Zr,Rt,Rr,wM,Y);
 
 			%calculating the beamforming currents again
 			[obj,Itbf] = calculateBeamFormingCurrents(obj,Zt,Rt,Y);
@@ -49,15 +52,12 @@ classdef omniMultiSpot_tx < powerTXApplication
 
             WPTManager = setSourceVoltages(obj,WPTManager,obj.Vt,GlobalTime);
 
-			evaluateEstimations(obj,WPTManager,GlobalTime)
-
 			%scheduling the next event	
             netManager = setTimer(obj,netManager,GlobalTime,obj.timeSkip);
         end
 		
 		function [obj,Itbf] = calculateBeamFormingCurrents(obj,Zt,Rt,Y)
 			[Vectors,Values] = eig(real(Y));
-
 			%the receiving power is maximized when the transmitting currents are proportional to the 
 			%eigenvector of greatest eigenvalue of real(Y) and all power is spent
 			[obj.lambda,i] = max(diag(Values));
@@ -70,9 +70,9 @@ classdef omniMultiSpot_tx < powerTXApplication
 			Itbf = c*maxEigenvector;
 		end
 			
-		function [Zt,Rt,Rr,Y] = getParammeters(obj,WPTManager)
+		function [Zt,Zr,Rt,Rr,wM,Y] = getParammeters(obj,WPTManager)
 			%requires omniscience, but can be understood as a stage of pre-processing.
-			Z = getZ(WPTManager.ENV,0);
+			Z = getCompleteLastZMatrix(WPTManager);
 			Zt = Z(1:WPTManager.nt_groups,1:WPTManager.nt_groups);
 			Rt = diag(diag(Zt));
 			wM = imag(Z(WPTManager.nt_groups+1:end,1:WPTManager.nt_groups));
@@ -81,12 +81,12 @@ classdef omniMultiSpot_tx < powerTXApplication
 			Rr = diag(diag(Zr));%receivers' resistance
 		end
 		
-		function evaluateEstimations(obj,WPTManager,GlobalTime)
-			%Getting the parammeters (omniscient agent)
-			[Zt,~,Rr,Y] = getParammeters(obj,WPTManager);
-
-			disp(['Global time (min): ', num2str(GlobalTime/60)]);
+		function evaluateEstimations(obj,WPTManager,GlobalTime,Zt,Zr,Rt,Rr,wM,Y)
+			disp('ESTIMATIONS:---------------------------------X');
+			disp(['Global time (h): ', num2str(GlobalTime/3600)]);
 			
+			
+			disp('State of the devices:');	
 			%omniscient information again, this time for getting the latest current measurements
 			I = WPTManager.latestCI;
 			It = I(1:WPTManager.nt_groups);
@@ -105,19 +105,48 @@ classdef omniMultiSpot_tx < powerTXApplication
 				obj = endSimulation(obj);
 			end
 
+
+			%the assumptions of the model: the currents and voltages are related according to equation 6
 			disp(['Equation 6 error: ', num2str(mean(abs(obj.Vt-(Zt+Y)*It)))]);
 
-			%power evaluations
-			delivered = obj.lambda*obj.Pmax/(obj.lambda+1);
-			rxPower = Ir'*Rr*Ir;
-			rxPower2 = It'*Y*It;%If Y is good, this value will approach rxPower
+			%The accurate delivered power
+			rxPowerRr = Ir'*Rr*Ir;
 
-			totalPower = It'*diag(diag(Zt))*It + rxPower;
-			disp(['Power expected to be delivered: ',num2str(delivered),'W; power delivered: ',...
-				num2str(rxPower), 'W; Power spent: ',num2str(totalPower),'W; Lambda: ', num2str(obj.lambda),...
-				'; Powe calc using the accurate Y: ',num2str(rxPower2),'W']);
+			%The delivered power using Y
+			rxPowerY = It'*real(Y)*It;%If Y is good, this value will approach rxPower
 
-			disp(['Equation 9 error: ', num2str(abs(delivered-rxPower)/delivered),' (0-1)']);
+			%rx power + tx power
+			totalPower = It'*Rt*It + rxPowerRr;
+
+			%x vector (see Apendix A)
+			x = sqrt(Rt)*It;
+			A = sqrt(inv(Rt))*real(Y)*sqrt(inv(Rt));
+			%this value must be equal to rxPower
+			rxPowerA = x'*A*x;
+
+			[Q,Lambda] = eig(A);
+			%Q must be orthogonal
+			disp(['Q orthogonality error: ', num2str(mean(mean(abs(eye(length(Q))-Q'*Q))))]);
+
+			%y corresponds to x' from the paper (see Apendix A). Y must have only the first position other 
+			%than 0
+			y = Q'*x;
+
+			%This value must be equal to rxPower
+			rxPowery = y'*Lambda*y;
+			
+			%getting the maximal eigenvalue (the max eigenvalue of real(Y) cannot be used for this
+			%estimation, because some constants are omitted for simplicity by the authors)
+			lambda = max(max(Lambda));
+			
+			%The power expected to be delivered according to theorem 4.1
+			delivered = lambda*obj.Pmax/(lambda+1);
+			
+			disp(['rx Power values in W (they all must be equal): ',num2str(rxPowerRr),...
+				';',num2str(rxPowerY),';',num2str(rxPowerA),';',num2str(rxPowery),';',...
+				num2str(delivered)]);
+			disp(['Total power spent (W): ', num2str(totalPower)]);
+			disp('X--------------------------------------------X');
 		end	
     end
 end
