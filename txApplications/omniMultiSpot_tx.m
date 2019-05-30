@@ -8,7 +8,6 @@ classdef omniMultiSpot_tx < powerTXApplication
         timeSkip %step between the time events (seconds)
 		Pmax %max active power to spend
 		Vt %last transmitting voltages
-		lambda %last high eigenvalue
     end
     methods
         function obj = omniMultiSpot_tx(timeSkip,Pmax)
@@ -43,7 +42,7 @@ classdef omniMultiSpot_tx < powerTXApplication
 			[Zt,Zr,Rt,Rr,wM,Y] = getParammeters(obj,WPTManager);
 
 			%prints omniscient information about the charging procedure
-			evaluateEstimations(obj,WPTManager,GlobalTime,Zt,Zr,Rt,Rr,wM,Y);
+			obj = evaluateEstimations(obj,WPTManager,GlobalTime,Zt,Zr,Rt,Rr,wM,Y);
 
 			%calculating the beamforming currents again
 			[obj,Itbf] = calculateBeamFormingCurrents(obj,Zt,Rt,Y);
@@ -60,7 +59,7 @@ classdef omniMultiSpot_tx < powerTXApplication
 			[Vectors,Values] = eig(real(Y));
 			%the receiving power is maximized when the transmitting currents are proportional to the 
 			%eigenvector of greatest eigenvalue of real(Y) and all power is spent
-			[obj.lambda,i] = max(diag(Values));
+			[~,i] = max(diag(Values));
 
 			maxEigenvector = Vectors(:,i);
 			
@@ -81,7 +80,7 @@ classdef omniMultiSpot_tx < powerTXApplication
 			Rr = diag(diag(Zr));%receivers' resistance
 		end
 		
-		function evaluateEstimations(obj,WPTManager,GlobalTime,Zt,Zr,Rt,Rr,wM,Y)
+		function obj = evaluateEstimations(obj,WPTManager,GlobalTime,Zt,Zr,Rt,Rr,wM,Y)
 			disp('ESTIMATIONS:---------------------------------X');
 			disp(['Global time (h): ', num2str(GlobalTime/3600)]);
 			
@@ -96,12 +95,15 @@ classdef omniMultiSpot_tx < powerTXApplication
 				SOC = getSOC(WPTManager.deviceList(i).obj.bat);
 				if SOC~=1
 					charging = true;
+					disp(['Max current for device ',num2str(i),': ', num2str(abs(Ir(i))),...
+						'A; SOC(0-1): ',num2str(SOC)]);
+				else
+					disp(['Device ',num2str(i),' ended charging']);
 				end
-				disp(['Max current for device ',num2str(i),': ', num2str(abs(Ir(i))),...
-					'A; SOC(0-1): ',num2str(SOC)]);
 			end
 			%used to avoid waiting too long simulations
 			if ~charging
+				disp('All devices ended charging');
 				obj = endSimulation(obj);
 			end
 
