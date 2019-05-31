@@ -25,8 +25,10 @@ classdef multiSpot_tx < powerTXApplication
 			%This is pre-parametrized
 			obj.Zt = getZt(obj,WPTManager);
 
-			%This can be initialized using any matrix, according to the paper
-			obj.Y = rand(WPTManager.nt_groups);
+			%This can be initialized using any matrix, according to the paper.
+			%But actually initializing it with a matrix so much different from the
+			%actual one cause divergence.
+			obj.Y = zeros(WPTManager.nt_groups);
 
 			%The first iteraction (expected bad results)
 			obj = calculateBeamFormingCurrents(obj);
@@ -139,9 +141,9 @@ classdef multiSpot_tx < powerTXApplication
 			%small error in order to guarantee that the assumptions made by Shi et al will be ok
 			disp(['Error for eq 5: ',num2str(sum(abs((1i)*iZr*wM*obj.It-Ir))/sum(abs(Ir))), ' (0-1)']);
 			disp(['Error for eq 6: ', num2str(mean(abs(obj.Vt-(obj.Zt+(wM')*iZr*(wM))*obj.It)))]);
-
+			
 			%The accurate delivered power
-		    rxPowerRr = Ir'*Rr*Ir;
+			rxPowerRr = Ir'*Rr*Ir;
 
 			%The delivered power using Y
 			rxPowerY = It'*real(Y)*It;%If Y is good, this value will approach rxPower
