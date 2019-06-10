@@ -57,7 +57,7 @@ classdef multiSpot_tx < powerTXApplication
 			if (sum(deltaIt~=0)>0)
 				deltaVt = (obj.Zt + obj.Y)*deltaIt;
 				obj.Y = obj.Y + deltaVt*(deltaVt.')/(deltaVt.'*obj.It);
-				evaluateEstimations(obj,WPTManager,GlobalTime);
+				obj = evaluateEstimations(obj,WPTManager,GlobalTime);
 			end
 			
 			%calculating the beamforming currents again
@@ -96,7 +96,7 @@ classdef multiSpot_tx < powerTXApplication
 		
 		function obj = evaluateEstimations(obj,WPTManager,GlobalTime)
 			disp('ESTIMATIONS:---------------------------------X');
-			disp(['Global time (h): ', num2str(GlobalTime/60)]);
+			disp(['Global time (h): ', num2str(GlobalTime/3600)]);
 
 			%this function uses omniscient information in order to evaluate Y estimation accuracy
 			Z = getCompleteLastZMatrix(WPTManager);
