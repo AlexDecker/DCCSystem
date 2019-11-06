@@ -1,9 +1,27 @@
 %Collects the data from nRepetitions of the specified simulation, considering the specified
 %instances 
 function generateData(appName, paramFile, configFile, fileInstances, nRepetitions)
-	output = ['data_',appName,'_',paramFile,'_',configFile,...
-		'_nRepeat_',num2str(nRepetitions)];
-	
+    %updating index.txt with the information regarding 
+    [cod, line] = system('tail -n 1 out/index.txt');
+    if cod ~= 0 %success of tail command
+        error('Could not read index.txt');
+    end
+    lineCell = strsplit(line, ';');
+    if length(lineCell)~=6 %6 fields
+        error('Unexpected line in index.txt');
+    end
+    fileNumber = str2num(lineCell{1});%get the first field
+    if isempty(fileNumber)%not numeric
+        fileNumber = 0;
+    end
+    fileNumber = fileNumber + 1;%this file will use the next available file number
+    %open in append mode
+    index_fp = fopen('out/index.txt','a+');
+	fprintf(index_fp, [num2str(fileNumber),'; ',appName,'; ',paramFile,'; ',...
+        configFile,'; |',sprintf('%d|',fileInstances),'; ',num2str(nRepetitions),'\n']);
+    fclose(index_fp);
+    
+	%Getting stuff to execute the simulation
 	conf = eval(configFile);%getting the number of devices
 	%initializing the structure for each device
 	devData = [];
@@ -41,6 +59,7 @@ function generateData(appName, paramFile, configFile, fileInstances, nRepetition
 		devData(d).VB(1,:) = devData(d).VB(1,:)./num;
 		devData(d).SOC(1,:) = devData(d).SOC(1,:)./num;
 	end
-
-	save(output, 'devData');
+	
+    save(['out/file',num2str(fileNumber),'.mat', 'devData');
+    
 end

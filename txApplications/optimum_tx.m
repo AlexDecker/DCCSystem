@@ -17,7 +17,7 @@ classdef optimum_tx < powerTXApplication
 
         function [obj,netManager,WPTManager] = init(obj,netManager,WPTManager)
 			%calculate the optimization voltages
-			[t,obj.voltage_progression] = calc_optimum_voltages(WPTManager,obj.Pmax,obj.timeSkip);
+			[t,obj.voltage_progression] = optimum_voltages(WPTManager,obj.Pmax,obj.timeSkip);
 			disp(['Expected finishing moment: ',num2str(t),', time: ',num2str(t*obj.timeSkip/60),'min']);
 			%apply the calculated voltages
             [obj,WPTManager] = applyVoltages(obj,0,WPTManager);

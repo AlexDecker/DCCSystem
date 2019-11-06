@@ -17,13 +17,15 @@ function plotComparativeData(fileStructArray)
 		for f=1:length(fileStructArray)
 			devData = devDataList{f};
 			if(length(devData)>=d)
-				plot(devData(d).SOC(2,:)/60,100*devData(d).SOC(1,:));
+				plot(devData(d).SOC(2,:)/60,100*devData(d).SOC(1,:),...
+                    'DisplayName',fileStructArray{f});
 			end
 		end
 		%legend(fileStructArray);
 		xlabel('Time (min)');
 		ylabel('SOC (%)');
 		title(['Device ',num2str(d)]);
+        legend;
 	end
 	
 	%Voltage progression
@@ -32,13 +34,15 @@ function plotComparativeData(fileStructArray)
 		for f=1:length(fileStructArray)
 			devData = devDataList{f};
 			if(length(devData)>=d)
-				plot(devData(d).VB(2,:)/60,devData(d).VB(1,:));
+				plot(devData(d).VB(2,:)/60,devData(d).VB(1,:),...
+                     'DisplayName',fileStructArray{f});
 			end
 		end
 		%legend(fileStructArray);
 		xlabel('Time (min)');
 		ylabel('Battery Voltage (V)');
 		title(['Device ',num2str(d)]);
+        legend;
 	end
 	
 	%Current progression
@@ -47,12 +51,14 @@ function plotComparativeData(fileStructArray)
 		for f=1:length(fileStructArray)
 			devData = devDataList{f};
 			if(length(devData)>=d)
-				plot(devData(d).CC(2,:)/60,1000*devData(d).CC(1,:));
+				plot(devData(d).CC(2,:)/60,1000*devData(d).CC(1,:),...
+                     'DisplayName',fileStructArray{f});
 			end
 		end
 		%legend(fileStructArray);
 		xlabel('Time (min)');
 		ylabel('Charge Current (mA)');
 		title(['Device ',num2str(d)]);
+        legend;
 	end	
 end

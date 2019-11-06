@@ -1,0 +1,4 @@
+FILE NUMBER; APPLICATION; PARAMETER FILE; CONFIGURATION FILE; FILE INSTANCES; NUMBER OF REPETITIONS
+1; dummie; params1_noConsumption; configs1; ||; 10
+2; multispot; params_MultiSpot; configs3; ||; 1
+3; omni_multispot; params_MultiSpot; configs3; ||; 1
