@@ -177,14 +177,14 @@ classdef NPortChargingProblem
                 if n1<2 || n2~=2
                     error(['Invalid convCellArray element: i=',num2str(i)]);
                 end
-                if obj.convCellArray{i}(1,1)~=0 || obj.convCellArray{i}(end,1)~=obj.maxCurr(i) ||...
+                if obj.convCellArray{i}(1,1)~=0 || obj.convCellArray{i}(end,1)~=obj.maxCurr(obj.nt+i) ||...
                     sum(obj.convCellArray{i}(:,2)<0)>0
                     error(['Invalid data for convCellArray element: i=',num2str(i)]);
                 end
                 for j=2:n1
                     if obj.convCellArray{i}(j,1)<obj.convCellArray{i}(j-1,1) ||...
                         obj.convCellArray{i}(j,2)<obj.convCellArray{i}(j-1,2)
-                        error(['Invalid data for convCellArray element: i=',num2str(i)]);
+                        error(['convCellArray must be monotonic: i=',num2str(i)]);
                     end
                 end
             end
@@ -199,15 +199,19 @@ classdef NPortChargingProblem
         %5: very high power (active)
         %6: offline device (charge dropped below the minimum)
         %solution: ntxtime matrix with the transmitting voltages of each time slot
-        function result = verify(obj, solution)
+        function [result, QLog] = verify(obj, solution)
             obj = check(obj);
+            
+            %charge vector
+            q = obj.initialCharge;
+            QLog = q;
+
             [nt, time] = size(solution);
             if nt~=obj.nt || time==0
                 result = 1;
                 return;
             end
-            %charge vector
-            q = obj.initialCharge;
+            
             %integrating...
             for t=1:time
                 %calculating the load resistance of each receiving device
@@ -221,12 +225,13 @@ classdef NPortChargingProblem
                 %verifying some constraints
                 if sum(abs(current)>obj.maxCurr)>0
                     result = 3;
+                    return;
                 end
-                if abs(current(obj.nt+1:end)'*solution(:,t))>obj.maxPapp
+                if abs(current(1:obj.nt)'*solution(:,t))>obj.maxPapp
                     result = 4;
                     return;
                 end
-                if real(current(obj.nt+1:end)'*solution(:,t))>obj.maxPact
+                if real(current(1:obj.nt)'*solution(:,t))>obj.maxPact
                     result = 5;
                     return;
                 end
@@ -237,13 +242,17 @@ classdef NPortChargingProblem
                         abs(current(obj.nt+r)))-obj.timeLine(t).Id(r);
                     chargeCurrent = [chargeCurrent; curr];
                 end
+
                 %updating the charge vector
                 q = min(q + obj.dt*chargeCurrent, obj.maxCharge);
+                QLog = [QLog,q];
+
                 if sum(q<obj.minCharge)>0
                     result = 6;%there is an offline device
                     return;
                 end
             end
+
             if sum(q<obj.chargeThreshold)>0
                 result = 2;%could not complete all charges
             else
