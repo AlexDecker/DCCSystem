@@ -3,6 +3,8 @@
 %to finish the charging in less than t1 units of time.
 classdef NPortChargingProblem
     properties
+        feasiblePastModel %used to allow multiple algorithms to manage the feasiblePasts
+
         timeLine
         
         dt
@@ -22,6 +24,7 @@ classdef NPortChargingProblem
         n %number of devices
         nt %number of transmitting devices
         nr %number of receiving devices
+        maxTau %number of time slots
     end
     methods
         %timeLine: data for each time slot. Vector of structs with the following fields
@@ -39,8 +42,10 @@ classdef NPortChargingProblem
         %maxCurr: vector which contains the maximum current amplitude for each device
         %maxPapp: maximum allowed apparent power
         %maxPact: maximum allowed active power
+        %feasiblePastModel: an empty object from a class which inherits from FeasiblePast which
+        %   is used to create new objects and manage the different algorithms according to user's will
         function obj = NPortChargingProblem(timeLine, dt, chargeData, rlCellArray, convCellArray,...
-            maxCurr, maxPapp, maxPact)
+            maxCurr, maxPapp, maxPact, feasiblePastModel)
             obj.timeLine = timeLine;
             obj.dt = dt;
             obj.minCharge = chargeData.minimum;
@@ -56,7 +61,11 @@ classdef NPortChargingProblem
         end
         %check if this object is acceptable
         function obj = check(obj)
-            
+            [n1,n2] = size(obj.timeLine);
+            if n1==0 || n2~=1
+                error('Unexpected dimensions of the timeLine');
+            end
+            obj.maxTau = n1;%number of time slots
             %verifying the number of devices
             [n1,n2] = size(obj.timeLine(1).Z);
             if n1~=n2
@@ -260,10 +269,53 @@ classdef NPortChargingProblem
             end
         end
         %Decides if a given instance of the N-Port charging problem can be solved
-        %for a given time limit t1. Returns a possible solution if it exists
-        function [solveable, solution] = solveDecisionVersion(obj, t1)
-            solveable = true;
-            solution = [];
+        %in exactly tau time slots. Returns a possible solution if it exists
+        function [solveable, solution] = solveDecisionVersion(obj, tau)
+            %some verifications
+            obj = check(obj);
+            if tau>maxTau
+                error('Not enough information to test for a so large value of tau');
+            end
+            %the final charge set (which is reached if the charging process is successful)
+            targetSet = generateTarget(obj.feasiblePastModel, obj.chargeThreshold, obj.maxCharge);
+            %generate the tau-th feasible past starting from tau
+            [past,tailList] = jthFeasiblePast(obj,tau,targetSet,tau);
+            if length(tailList)~=tau-1
+                error('Invalid dimensions for tailList');
+            end
+            %the instance can be solved in exactly tau slots of time iff initialCharge belongs to past
+            q = search(past,obj.initialCharge);
+            if ~isempty(q)
+                solveable = true;
+                solution = zeros(obj.nt,tau);
+                %building the solution by walking through the list of pasts
+                solution(:,1) = q.voltages;
+                for t = 1:tau
+                    q = search(tailList(t),q.next);
+                    solution(:,t+1) = q.voltages;
+                end
+            else
+                solveable = false;
+                solution = [];
+            end
+        end
+        %creates the j-th feasible past starting form time slot t and with the charge vector set
+        %targetSet. Returns the j-th past and the list containing the (j-1)-th, (j-2)-th, ..., 0-th past
+        function [past,tailList] = jthFeasiblePast(obj, j, targetSet, t)
+            %the 0-th past is the present   
+            if j==0
+                past = targetSet;
+                tailList = [];
+            else
+                %the immediatly anterior past (j-1 th past)
+                [past_j_1, other_past] = jthFeasiblePast(obj, j-1, targetSet, t);
+                %build the new past from the anterior
+                past_j = newFeasiblePast(obj.feasiblePastModel,past_j_1,...
+                    timeLine(t-j+1), dt, minCharge, maxCurr, maxPapp, maxPact,...
+                    rlCellArray, convCellArray);
+                %Now we have past_j -> past_j_1 -> other_past
+                tailList = [past_j_1, other_past];
+            end
         end
     end
 end

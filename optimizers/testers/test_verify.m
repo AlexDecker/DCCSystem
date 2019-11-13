@@ -50,7 +50,7 @@ while true
                     [0,0; minCurr(2)-1e-9,0; minCurr(2),minCurr(2); maxCurr(4),maxCurr(4)]};
     
     NPCP = NPortChargingProblem(timeLine, dt, chargeData, rlCellArray, convCellArray, maxCurr,...
-            maxPapp, maxPact);
+            maxPapp, maxPact, FeasiblePast());
     
     %Starting greedy algorithm
     q = chargeData.initial;%initial charges
