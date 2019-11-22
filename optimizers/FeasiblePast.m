@@ -17,13 +17,13 @@ classdef FeasiblePast
         %given timeSlot, whithout disrespecting minCharge, maxCurr, maxPapp and
         %maxPact constraints. See NPortChargingProblem class
         function new = newFeasiblePast(obj, targetSet, timeSlot, dt,...
-            minCharge, maxCurr, maxPapp, maxPact, rlCellArray, convCellArray)
+            chargeData, deviceData, constraints)
             new = [];
         end
         
         %generate a target set, that is, the set of all valid charge vectors for
         %the charging to be complete
-        function target = generateTarget(obj, threshold, maxCharge)
+        function target = generateTarget(obj, chargeData)
             target = [];
         end
         

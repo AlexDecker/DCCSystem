@@ -5,22 +5,20 @@ classdef NPortChargingProblem
     properties
         feasiblePastModel %used to allow multiple algorithms to manage the feasiblePasts
 
+        %time variant data
         timeLine
-        
         dt
+        
+        %charge constraints and specific data
+        chargeData
 
-        minCharge
-        initialCharge
-        chargeThreshold
-        maxCharge
+        %device behavior specific data
+        deviceData
 
-        maxCurr
-        maxPapp
-        maxPact
-
-        rlCellArray
-        convCellArray
-
+        %general constraints (not regarding charge)
+        constraints
+    end
+    properties(Access=private)
         n %number of devices
         nt %number of transmitting devices
         nr %number of receiving devices
@@ -36,27 +34,24 @@ classdef NPortChargingProblem
         %   *initial: vector with the initial charge of each device
         %   *threshold: vector with the minimum charge of each device at the end
         %   *maximum: the maximum charge supported by each battery
-        %rlCellArray: cell array containing lookup tables for the load resistance given the SOC
-        %convCellArray: cell array containing lookup tables for the conversion efficiency given
-        %   the input amplitude, from 0A to maxCurr
-        %maxCurr: vector which contains the maximum current amplitude for each device
-        %maxPapp: maximum allowed apparent power
-        %maxPact: maximum allowed active power
+        %deviceData: struct containing
+        %   *deviceData.rlCellArray: Lookup tables for load resistance given the SOC
+        %   *deviceData.convCellArray: Lookup tables for conversion efficiency given the input amplitude,
+        %   from 0A to maxCurr
+        %constraints: struct contaning
+        %   *maxCurr: vector which contains the maximum current amplitude for each device
+        %   *maxPapp: maximum allowed apparent power
+        %   *maxPact: maximum allowed active power
         %feasiblePastModel: an empty object from a class which inherits from FeasiblePast which
         %   is used to create new objects and manage the different algorithms according to user's will
-        function obj = NPortChargingProblem(timeLine, dt, chargeData, rlCellArray, convCellArray,...
-            maxCurr, maxPapp, maxPact, feasiblePastModel)
+        function obj = NPortChargingProblem(timeLine, dt, chargeData, deviceData,...
+            constraints, feasiblePastModel)
             obj.timeLine = timeLine;
             obj.dt = dt;
-            obj.minCharge = chargeData.minimum;
-            obj.initialCharge = chargeData.initial;
-            obj.chargeThreshold = chargeData.threshold;
-            obj.maxCharge = chargeData.maximum;
-            obj.rlCellArray = rlCellArray;
-            obj.convCellArray = convCellArray;
-            obj.maxCurr = maxCurr;
-            obj.maxPapp = maxPapp;
-            obj.maxPact = maxPact;
+            obj.chargeData = chargeData;
+            obj.deviceData = deviceData;
+            obj.constraints = constraints;
+            obj.feasiblePastModel = feasiblePastModel;
             obj = check(obj);
         end
         %check if this object is acceptable
@@ -115,85 +110,88 @@ classdef NPortChargingProblem
                 error('dt must be a real positive escalar.');
             end
             
-            [n1,n2] = size(obj.minCharge);
-            if n1~=obj.nr || n2~=1 || sum(real(obj.minCharge)~=obj.minCharge)>0 ||...
-                sum(obj.minCharge<0)>0
-                error('minCharge must have a real non-negative value for each receiver.');
+            [n1,n2] = size(obj.chargeData.minimum);
+            if n1~=obj.nr || n2~=1 || sum(real(obj.chargeData.minimum)~=obj.chargeData.minimum)>0 ||...
+                sum(obj.chargeData.minimum<0)>0
+                error('chargeData.minimum must have a real non-negative value for each receiver.');
             end
 
-            [n1,n2] = size(obj.initialCharge);
-            if n1~=obj.nr || n2~=1 || sum(real(obj.initialCharge)~=obj.initialCharge)>0 ||...
-                sum(obj.initialCharge-obj.minCharge<=0)>0
-                error(['initialCharge must have a real non-negative value for each receiver.',...
-                    'Each value must be greater than the minCharge.']);
+            [n1,n2] = size(obj.chargeData.initial);
+            if n1~=obj.nr || n2~=1 || sum(real(obj.chargeData.initial)~=obj.chargeData.initial)>0 ||...
+                sum(obj.chargeData.initial-obj.chargeData.minimum<=0)>0
+                error(['chargeData.initial must have a real non-negative value for each receiver.',...
+                    'Each value must be greater than the chargeData.minimum.']);
             end
             
-            [n1,n2] = size(obj.chargeThreshold);
-            if n1~=obj.nr || n2~=1 || sum(real(obj.chargeThreshold)~=obj.chargeThreshold)>0 ||...
-                sum(obj.chargeThreshold-obj.initialCharge<0)>0
-                error(['chargeThreshold must have a real non-negatve value for each receiver. ',...
-                    'Each value must be at least the initialCharge.']);
+            [n1,n2] = size(obj.chargeData.threshold);
+            if n1~=obj.nr || n2~=1 || sum(real(obj.chargeData.threshold)~=obj.chargeData.threshold)>0 ||...
+                sum(obj.chargeData.threshold-obj.chargeData.initial<0)>0
+                error(['chargeData.threshold must have a real non-negatve value for each receiver. ',...
+                    'Each value must be at least the chargeData.initial.']);
             end
 
-            [n1,n2] = size(obj.maxCharge);
-            if n1~=obj.nr || n2~=1 || sum(real(obj.maxCharge)~=obj.maxCharge)>0 ||...
-                sum(obj.maxCharge-obj.chargeThreshold<0)>0
-                error(['maxCharge must have a real positive value for each receiver. ',...
-                    'Each value must be at least the corresponding chargeThreshold']);
+            [n1,n2] = size(obj.chargeData.maximum);
+            if n1~=obj.nr || n2~=1 || sum(real(obj.chargeData.maximum)~=obj.chargeData.maximum)>0 ||...
+                sum(obj.chargeData.maximum-obj.chargeData.threshold<0)>0
+                error(['chargeData.maximum must have a real positive value for each receiver. ',...
+                    'Each value must be at least the corresponding chargeData.threshold']);
             end
             
-            [n1,n2] = size(obj.maxCurr);
-            if n1~=obj.n || n2~=1 || sum(real(obj.maxCurr)~=obj.maxCurr)>0 ||...
-                sum(obj.maxCurr<=0)>0
+            [n1,n2] = size(obj.constraints.maxCurr);
+            if n1~=obj.n || n2~=1 || sum(real(obj.constraints.maxCurr)~=obj.constraints.maxCurr)>0 ||...
+                sum(obj.constraints.maxCurr<=0)>0
                 error('maxCurr must have a real positive value for each device.');
             end
 
-            [n1,n2] = size(obj.maxPapp);
-            if n1~=1 || n2~=1 || real(obj.maxPapp)~=obj.maxPapp || obj.maxPapp<=0
+            [n1,n2] = size(obj.constraints.maxPapp);
+            if n1~=1 || n2~=1 || real(obj.constraints.maxPapp)~=obj.constraints.maxPapp ||...
+                obj.constraints.maxPapp<=0
                 error('maxPapp must be a real non-negative scalar.');
             end
             
-            [n1,n2] = size(obj.maxPact);
-            if n1~=1 || n2~=1 || real(obj.maxPact)~=obj.maxPact || obj.maxPact<=0
+            [n1,n2] = size(obj.constraints.maxPact);
+            if n1~=1 || n2~=1 || real(obj.constraints.maxPact)~=obj.constraints.maxPact ||...
+                obj.constraints.maxPact<=0
                 error('maxPact must be a real non-negative scalar.');
             end
 
-            if length(obj.rlCellArray)~=obj.nr
-                error('rlCellArray must have one element for each receiving device.');
+            if length(obj.deviceData.rlCellArray)~=obj.nr
+                error('deviceData.rlCellArray must have one element for each receiving device.');
             end
             for i=1:obj.nr
-                [n1,n2] = size(obj.rlCellArray{i});
+                [n1,n2] = size(obj.deviceData.rlCellArray{i});
                 if n1<2 || n2~=2
-                    error(['Invalid rlCellArray element: i=',num2str(i)]);
+                    error(['Invalid deviceData.rlCellArray element: i=',num2str(i)]);
                 end
-                if obj.rlCellArray{i}(1,1)~=0 || obj.rlCellArray{i}(end,1)~=1 ||...
-                    sum(obj.rlCellArray{i}(:,2)<0)>0
+                if obj.deviceData.rlCellArray{i}(1,1)~=0 || obj.deviceData.rlCellArray{i}(end,1)~=1 ||...
+                    sum(obj.deviceData.rlCellArray{i}(:,2)<0)>0
                     error(['Invalid data for rlCellArray element: i=',num2str(i)]);
                 end
                 for j=2:n1
-                    if obj.rlCellArray{i}(j,1)<obj.rlCellArray{i}(j-1,1) ||...
-                        obj.rlCellArray{i}(j,2)<=obj.rlCellArray{i}(j-1,2)
+                    if obj.deviceData.rlCellArray{i}(j,1)<obj.deviceData.rlCellArray{i}(j-1,1) ||...
+                        obj.deviceData.rlCellArray{i}(j,2)<=obj.deviceData.rlCellArray{i}(j-1,2)
                         error(['Invalid data for rlCellArray element: i=',num2str(i)]);
                     end
                 end
             end
             
-            if length(obj.convCellArray)~=obj.nr
-                error('convCellArray must have one element for each receiving device.');
+            if length(obj.deviceData.convCellArray)~=obj.nr
+                error('deviceData.convCellArray must have one element for each receiving device.');
             end
             for i=1:obj.nr
-                [n1,n2] = size(obj.convCellArray{i});
+                [n1,n2] = size(obj.deviceData.convCellArray{i});
                 if n1<2 || n2~=2
-                    error(['Invalid convCellArray element: i=',num2str(i)]);
+                    error(['Invalid deviceData.convCellArray element: i=',num2str(i)]);
                 end
-                if obj.convCellArray{i}(1,1)~=0 || obj.convCellArray{i}(end,1)~=obj.maxCurr(obj.nt+i) ||...
-                    sum(obj.convCellArray{i}(:,2)<0)>0
-                    error(['Invalid data for convCellArray element: i=',num2str(i)]);
+                if obj.deviceData.convCellArray{i}(1,1)~=0 ||...
+                    obj.deviceData.convCellArray{i}(end,1)~=obj.constraints.maxCurr(obj.nt+i) ||...
+                    sum(obj.deviceData.convCellArray{i}(:,2)<0)>0
+                    error(['Invalid data for deviceData.convCellArray element: i=',num2str(i)]);
                 end
                 for j=2:n1
-                    if obj.convCellArray{i}(j,1)<obj.convCellArray{i}(j-1,1) ||...
-                        obj.convCellArray{i}(j,2)<obj.convCellArray{i}(j-1,2)
-                        error(['convCellArray must be monotonic: i=',num2str(i)]);
+                    if obj.deviceData.convCellArray{i}(j,1)<obj.deviceData.convCellArray{i}(j-1,1) ||...
+                        obj.deviceData.convCellArray{i}(j,2)<obj.deviceData.convCellArray{i}(j-1,2)
+                        error(['deviceData.convCellArray must be monotonic: i=',num2str(i)]);
                     end
                 end
             end
@@ -212,7 +210,7 @@ classdef NPortChargingProblem
             obj = check(obj);
             
             %charge vector
-            q = obj.initialCharge;
+            q = obj.chargeData.initial;
             QLog = q;
 
             [nt, time] = size(solution);
@@ -226,43 +224,43 @@ classdef NPortChargingProblem
                 %calculating the load resistance of each receiving device
                 Rl = [];
                 for r = 1:obj.nr
-                    Rl = [Rl; interp1(obj.rlCellArray{r}(:,1),obj.rlCellArray{r}(:,2),...
-                            q(r,end)/obj.maxCharge(r))];
+                    Rl = [Rl; interp1(obj.deviceData.rlCellArray{r}(:,1),obj.deviceData.rlCellArray{r}(:,2),...
+                            q(r,end)/obj.chargeData.maximum(r))];
                 end       
                 %calculating the phasor current vector
                 current = (obj.timeLine(t).Z+diag([0;0;Rl]))\[solution(:,t);zeros(obj.nr,1)];
                 %verifying some constraints
-                if sum(abs(current)>obj.maxCurr)>0
+                if sum(abs(current)>obj.constraints.maxCurr)>0
                     result = 3;
                     return;
                 end
-                if abs(current(1:obj.nt)'*solution(:,t))>obj.maxPapp
+                if abs(current(1:obj.nt)'*solution(:,t))>obj.constraints.maxPapp
                     result = 4;
                     return;
                 end
-                if real(current(1:obj.nt)'*solution(:,t))>obj.maxPact
+                if real(current(1:obj.nt)'*solution(:,t))>obj.constraints.maxPact
                     result = 5;
                     return;
                 end
                 %converting the currents
                 chargeCurrent = [];
                 for r = 1:obj.nr
-                    curr = interp1(obj.convCellArray{r}(:,1),obj.convCellArray{r}(:,2),...
+                    curr = interp1(obj.deviceData.convCellArray{r}(:,1),obj.deviceData.convCellArray{r}(:,2),...
                         abs(current(obj.nt+r)))-obj.timeLine(t).Id(r);
                     chargeCurrent = [chargeCurrent; curr];
                 end
 
                 %updating the charge vector
-                q = min(q + obj.dt*chargeCurrent, obj.maxCharge);
+                q = min(q + obj.dt*chargeCurrent, obj.chargeData.maximum);
                 QLog = [QLog,q];
 
-                if sum(q<obj.minCharge)>0
+                if sum(q<obj.chargeData.minimum)>0
                     result = 6;%there is an offline device
                     return;
                 end
             end
 
-            if sum(q<obj.chargeThreshold)>0
+            if sum(q<obj.chargeData.threshold)>0
                 result = 2;%could not complete all charges
             else
                 result = 0;%valid solution
@@ -277,14 +275,14 @@ classdef NPortChargingProblem
                 error('Not enough information to test for a so large value of tau');
             end
             %the final charge set (which is reached if the charging process is successful)
-            targetSet = generateTarget(obj.feasiblePastModel, obj.chargeThreshold, obj.maxCharge);
+            targetSet = generateTarget(obj.feasiblePastModel, obj.chargeData);
             %generate the tau-th feasible past starting from tau
             [past,tailList] = jthFeasiblePast(obj,tau,targetSet,tau);
             if length(tailList)~=tau-1
                 error('Invalid dimensions for tailList');
             end
-            %the instance can be solved in exactly tau slots of time iff initialCharge belongs to past
-            q = search(past,obj.initialCharge);
+            %the instance can be solved in exactly tau slots of time iff chargeData.initial belongs to past
+            q = search(past,obj.chargeData.initial);
             if ~isempty(q)
                 solveable = true;
                 solution = zeros(obj.nt,tau);
@@ -310,9 +308,8 @@ classdef NPortChargingProblem
                 %the immediatly anterior past (j-1 th past)
                 [past_j_1, other_past] = jthFeasiblePast(obj, j-1, targetSet, t);
                 %build the new past from the anterior
-                past_j = newFeasiblePast(obj.feasiblePastModel,past_j_1,...
-                    timeLine(t-j+1), dt, minCharge, maxCurr, maxPapp, maxPact,...
-                    rlCellArray, convCellArray);
+                past_j = newFeasiblePast(obj.feasiblePastModel,past_j_1,timeLine(t-j+1),...
+                    dt, chargeData, deviceData, constraints);
                 %Now we have past_j -> past_j_1 -> other_past
                 tailList = [past_j_1, other_past];
             end

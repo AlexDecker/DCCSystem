@@ -44,13 +44,17 @@ while true
     %data regarding the load resistance
     rlTable = [0, 0; 1, chargeData.maximum(1)];
     rlCellArray = {rlTable, rlTable};
-    
     %current conversion function
     convCellArray = {[0,0; maxCurr(3),maxCurr(3)],...
                     [0,0; minCurr(2)-1e-9,0; minCurr(2),minCurr(2); maxCurr(4),maxCurr(4)]};
+    deviceData.rlCellArray = rlCellArray;
+    deviceData.convCellArray = convCellArray;
     
-    NPCP = NPortChargingProblem(timeLine, dt, chargeData, rlCellArray, convCellArray, maxCurr,...
-            maxPapp, maxPact, FeasiblePast());
+    constraints.maxCurr = maxCurr;
+    constraints.maxPapp = maxPapp;
+    constraints.maxPact = maxPact;
+
+    NPCP = NPortChargingProblem(timeLine, dt, chargeData, deviceData, constraints, FeasiblePast());
     
     %Starting greedy algorithm
     q = chargeData.initial;%initial charges
