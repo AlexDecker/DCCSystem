@@ -58,7 +58,7 @@ while true
     hashSize = ceil(10000*rand);
     nLevels = 1+ceil(10*rand);
     
-    feasiblePastModel = FPDummie(hashSize, nLevels, nr);
+    feasiblePastModel = FPDummie(hashSize, nLevels, chargeData.minimum, chargeData.maximum);
     
     tic
     target = generateTarget(feasiblePastModel, chargeData);

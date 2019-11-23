@@ -8,40 +8,38 @@ classdef FPDummie < FeasiblePast
     properties(GetAccess=public,SetAccess=private)
         bag %set of charge vectors (hash)
         nLevels %number of discrete levels for the charge values
-        multipliers %used to avoid hash collisions. See hashIndex
         minStoredCharges %minimal charges already in the bag
         maxStoredCharges %maximal charges already in the bag
+        multipliers %used to minimize collisions
+        %limits for the values of charge (for each device)
+        minLimit
+        maxLimit
     end
     methods
-        function obj = FPDummie(hashSize,nLevels,nr)
+        function obj = FPDummie(hashSize,nLevels,minLimit,maxLimit)
             if hashSize<1
                 error('hashSize must be at least 1');
             end
             if nLevels<2
                 error('nLevels must be at least 2');
             end
-            if nr<1
-                error('nr must be at least 1');
+            [nr,s2] = size(minLimit);
+            [s3,s4] = size(maxLimit);
+            if nr==0 || s2~=1 || s3~=nr || s4~=1 || sum(minLimit>maxLimit)~=0
+                error('Invalid limits');
             end
         
             obj.bag = cell(hashSize,1);%create the hash as a cell Array
             obj.nLevels = nLevels;
-            
-            %search for nr prime numbers greater than the number of discrate
-            %levels of each charge value
-            num = 2*nLevels;%start by the first 100 numbers
-            while true
-                p = primes(num);
-                obj.multipliers = p(p>nLevels);
-                if length(obj.multipliers)>=nr
-                    obj.multipliers = obj.multipliers(1:nr);
-                    break;
-                end
-                num = 5*num;%not enough, get exponencially more numbers (thats ok,
-                %since this function is not very common to be executed when compared
-                %to others and nr is usually small when compared to nLevels)
-            end
 
+            obj.minLimit = minLimit;
+            obj.maxLimit = maxLimit;
+
+            obj.multipliers = zeros(nr,1);
+            for i=1:nr
+                obj.multipliers(i) = nLevels^(i-1);
+            end
+            
             %we still do not have stored vectors, so these are dummie
             obj.minStoredCharges = NaN*ones(nr,1);
             obj.maxStoredCharges = NaN*ones(nr,1);
@@ -55,19 +53,19 @@ classdef FPDummie < FeasiblePast
             %getting the number of receivers
             nr = length(chargeData.minimum);
 
-            %create a new empty object
-            new = FPDummie(length(obj.bag),obj.nLevels,nr);
-
             %All feasible past vectors pareto-dominates minLimit.
             %In this case, the maximum 
             minLimit = max(target.minStoredCharges - ...
-                dt*constraints.maxCurrent(end-nr+1:end) + 
+                dt*constraints.maxCurrent(end-nr+1:end) + ... 
                 dt*timeSlot.Id,...
                 chargeData.minimum);
             %maxLimit pareto-dominates all feasible past vectors
             %Roughly, there is no charge current and still the largest values from
             %the target are reached
             maxLimit = min(target.maxStoredCharges + dt*timeSlot.Id, chargeData.maximum);
+
+            %create a new empty object
+            new = FPDummie(length(obj.bag),obj.nLevels,minLimit,maxLimit);
 
             %populate the new object with acceptable charge vectors
             bagSize = obj.nLevels^nr;
@@ -112,11 +110,11 @@ classdef FPDummie < FeasiblePast
 
         end
         function target = generateTarget(obj,chargeData)
-            %create a new empty object
-            target = FPDummie(length(obj.bag),obj.nLevels,nr);
-            
             %getting the number of receivers
             nr = length(chargeData.minimum);
+
+            %create a new empty object
+            target = FPDummie(length(obj.bag),obj.nLevels,chargeData.threshold,chargeData.maximum);
 
             %populate the new object with acceptable charge vectors
             bagSize = obj.nLevels^nr;
@@ -157,21 +155,14 @@ classdef FPDummie < FeasiblePast
         %hash methods-----------------------------------------------
         function h = hashIndex(obj,chargeVector)
             [s1,s2] = size(chargeVector);
-            if s1~=length(obj.maxLimit) || s2~=1
+            if s1~=length(obj.multipliers) || s2~=1
                 error('Unexpected dimensions for chargeVector');
             end
-            %minLimit is 0, maxLimit is 1.
-            normalized = (chargeVector-obj.minLimit)./(obj.maxLimit-obj.minLimit);
-            %transforms into a value between 1 and hashSize (eventually getting anormal values)
-            h = ceil(mean(normalized)*length(obj.bag));
-            %verify eventual anormal values
-            if h<=0
-                h=1;
-            else
-                if h>length(obj.bag)
-                    h=length(obj.bag);
-                end
-            end
+            %minLimit becames 0, maxLimit becames nLevels-1
+            normalized = round((obj.nLevels-1)*(chargeVector-obj.minLimit)./(obj.maxLimit-obj.minLimit));
+
+            %transforms into a value between 1 and hashSize
+            h = mod(sum(normalized.*obj.multipliers),length(obj.bag))+1;
         end
 
         function obj = insert(obj,element)
