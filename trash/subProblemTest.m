@@ -4,15 +4,21 @@ clear all;
 
 rng('shuffle');
 
-err = 1e-9;%tolerancia
+err = 1e-6;%tolerancia
 
-timeList = [];
-convergiu = 0;
-nconvergiu = 0;
+
+for nr = 1:10
+    for nt = 1:10
+        LOG(nr,nt).timeList = [];
+        LOG(nr,nt).iterationList = [];
+        LOG(nr,nt).convergiu = 0;
+        LOG(nr,nt).nconvergiu = 0;
+    end
+end
 
 while true
-    nr = round(4*rand)+1;
-    nt = round(4*rand)+1;
+    nr = round(9*rand)+1
+    nt = round(9*rand)+1
 
     R = 3*diag(rand(nt+nr,1));%resitencia
     
@@ -55,17 +61,52 @@ while true
     if abs(p-ref)/max(1,abs(ref))>err
         error('potencia ativa');
     end
+    
+    disp('Testes preliminares executados com sucesso');
+    
+    maxIt = sqrt(real(iT).^2+imag(iT).^2) + rand(nt,1);
+    maxP = p+rand;
+    absIr = abs(H*iT);
+
+    tic
+
+    [v,iterations,erro] = subSolver(ZT, ZR, M, maxIt, maxP, absIr, 100, 1000, err);
+
+    LOG(nr,nt).timeList = [LOG(nr,nt).timeList,toc];
+    LOG(nr,nt).iterationList = [LOG(nr,nt).iterationList,iterations];
+    toc
+
+    if isempty(v)
+        LOG(nr,nt).nconvergiu = LOG(nr,nt).nconvergiu+1;
+        disp('Instancia do sistema de inequacoes executada sem sucesso');
+    else
+        %verificando a resposta novamente
+        if sum(abs(abs(real(v))-abs(v))>2*err)>0
+            error('as tensoes devem ser reais');
+        end
+        it = ZTT\v;
+        ir = H*it;
+        if sum(abs(it)-maxIt>2*err)>0
+            error('sobre corrente dos transmissores');
+        end
+        if sum(abs(abs(ir)-absIr)>2*err)>0
+            error('errou o alvo');
+        end
+        if real(it'*v)-maxP>2*err
+            error('Limite de potencia');
+        end
+        LOG(nr,nt).convergiu = LOG(nr,nt).convergiu+1;
+        disp('Instancia do sistema de inequacoes executada com sucesso');
+    end
+
+    %{ 
+    %Usando a Newton-Raphson com apenas igualdades---------------------------------
 
     %gerando uma instancia que com certeza tem pelo menos solucao x
     miT2 = real(iT).^2+imag(iT).^2;%maxima amplitude para a corrente de transmissao
     %p eh a potencia ativa maxima
     miR2 = abs(H*iT).^2;%corrente alvo
-    
-    disp('Testes preliminares executados com sucesso');
-    
-    %Usando a Newton-Raphson com apenas igualdades---------------------------------
-    
-    
+
     ttl1 = 100;%solucoes iniciais distintas
     tic
     while(true)
@@ -132,8 +173,6 @@ while true
     timeList = [timeList,toc];
     toc
     disp('Instancia do sistema de equacoes executada com sucesso');
+    %}
 
-    tic
-    toc
-    disp('Instancia do sistema de inequacoes executada com sucesso');
 end

@@ -2,12 +2,14 @@
 %Problem. Given a reference for the amplitude of the receiving currents, return a transmitting
 %real voltage vector which respects the active power and the transmitting current constraints
 %and leads to the desired receiving current.
-%The function returns an empty vector if no valid solution was found.
+%The function returns an empty vector if no valid solution was found. The required number of
+%iterations is also returned.
 %For the naming conventions, see the reference material
 %ttl1: maximum number of attempts considering different initial solutions
 %ttl2: maximum number of iterations per attempt
-function v = subSolver(ZT, ZR, M, maxIt, maxP, absIr, ttl1, ttl2)
-
+%tolerance: maximum value to be considered as zero
+function [v, iterations, err] = subSolver1(ZT, ZR, M, maxIt, maxP, absIr, ttl1, ttl2, tolerance)
+    iterations = 0;
     %some useful definitions
     nt = length(ZT);%number of TX
     nr = length(ZR);%number of RX
@@ -34,8 +36,11 @@ function v = subSolver(ZT, ZR, M, maxIt, maxP, absIr, ttl1, ttl2)
     %The coefficient matrix for the power constraint
     C = L.'*[real(Z), -imag(Z);
              zeros(nt), zeros(nt)]*L;
+    
+    u = tolerance;%initial value for the barrier multiplicator
 
     while true
+        success = true;
         %create an initial solution. It must respect the maximum TX amplitude and power
         %constraints.
         w0 = rand(2*nt,1); %any solution
@@ -53,11 +58,13 @@ function v = subSolver(ZT, ZR, M, maxIt, maxP, absIr, ttl1, ttl2)
         %getting a good initial solution
         w = m*w0;
         %calculating the slack variables
-        fb = zeros(nt,1);
+        sb = zeros(nt,1);
         for k=1:nt
-            fb(k) = maxIt(k)^2 - w.'*B{k}*w;
+            sb(k) = maxIt(k)^2 - w.'*B{k}*w;
         end
-        fc = maxP - w.'*C*w;
+        sc = maxP - w.'*C*w;
+
+        x = [w;sb;sc];%solution vector
         
         %restarting time to leave
         ttl = ttl2;
@@ -68,26 +75,68 @@ function v = subSolver(ZT, ZR, M, maxIt, maxP, absIr, ttl1, ttl2)
         while true
             %calculating the residues (nt+nr+1 for the regular constraints and
             %nt+1 for the slack ones
-            f = zeros(2*nt+nr+2);
-            for i=1:nr
+            f = zeros(nt+nr+1,1);
+            for k=1:nr
                 f(k) = w.'*A{k}*w - absIr(k)^2;
             end
-            for i=1:nt
-                f(k+nr) = w.'*B{k}*w + fb(k) - maxIt(k)^2;
+            for k=1:nt
+                f(k+nr) = w.'*B{k}*w + sb(k) - maxIt(k)^2;
             end
-            f(nt+nr+1) = w.'*C*w + fc - maxP;
-            %VARIAVEIS DE FOLGA AGR
+            f(nt+nr+1) = w.'*C*w + sc - maxP;
+            %slack variables
+            f(end) = -u*sum(log(tolerance/2+sb))-u*log(tolerance/2+sc);
 
-            if ttl==1 || err>=merr
-                w = [];
+            err = mean(abs(f));
+
+            if ttl==0 || err>=merr
+                success=false;
+                u = u/2;%approach more to zero
                 break;
             end
+
+            if err<=tolerance %stop condition: success
+                break;
+            end
+
+            %Jacobian: each line has the gradient of the k-th equation fk
+            %Thus, each line is structured as follows:
+            %[dfk/dw(1),...,dfk/dw(2nt),dfk/dsb(1),...,dfk/dsb(nt),dfk/dsc]
+            J = zeros(nt+nr+1,3*nt+1);
+            for k=1:nr
+                %Ir constraint (no slack variables, so nt+1 zeros)
+                J(k,:) = [w.'*(A{k}+A{k}.'), zeros(1,nt+1)];
+            end
+            for k=1:nt
+                %It constraint (each equation has a single individual slack variable)
+                J(k+nr,:) = [w.'*(B{k}+B{k}.'), zeros(1,k-1),1,zeros(1,nt-k+1)];
+            end
+            %only the last slack variable has a non-zero derivative
+            J(nt+nr+1,:) = [w.'*(C+C.'), zeros(1,nt), 1];
+            %the slack constraint
+            J(end,:) = [zeros(1,2*nt), -u./(tolerance/2+sb.'), -u/(tolerance/2+sc)];
+
+            %next solution
+            x = x - pinv(J)*f;
+            w = x(1:2*nt);
+            sb = x(2*nt+1:3*nt);
+            sc = x(end);
+
             ttl = ttl-1;
+            iterations = iterations+1;
         end
 
-        if ttl1==1 %no more attempts
+        if ttl1==1 || err<=tolerance %no more attempts
             break; %finish with all you have
         end
         ttl1 = ttl1-1; %less one attempt...
+    end
+
+    %composing the transmitting current vector and then the voltage vector
+    if success
+        t = L*w;%t=[real(it),imag(it)]
+        It = t(1:nt)+(1i)*t(nt+1:end);
+        v = Z*It;
+    else
+        v = [];
     end
 end
