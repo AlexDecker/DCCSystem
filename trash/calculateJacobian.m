@@ -9,14 +9,14 @@ function J = calculateJacobian(A, B, C, tolerance, penaltyFactor, w, sb, sc)
 
     Jb = zeros(nt,3*nt+1);
     for k=1:nt %for each maximum TX current constraint
-        Jb(k,:) = [w.'*(B{k}+B{k}.'),zeros(1,nt+1)];
+        Jb(k,:) = [w.'*(B{k}+B{k}.'),zeros(1,k-1),1,zeros(1,nt-k),0];
     end
 
-    JC = [w.'*(C+C.'),zeros(1,nt+1)];%power constraint
+    Jc = [w.'*(C+C.'),zeros(1,nt),1];%power constraint
 
     %slack constraints
-    Js = [zeros(nt,2*nt+1),diag(...
+    Js = [zeros(nt+1,2*nt),diag(...
         -penaltyFactor*tolerance*exp(-penaltyFactor*[sb.',sc]))];
-
+    
     J = [Ja;Jb;Jc;Js];
 end

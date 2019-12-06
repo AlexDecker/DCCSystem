@@ -96,6 +96,12 @@ while true
             
             %if the solution is not ready, iterate.
             J = calculateJacobian(A, B, C, err, penaltyFactor, w, sb, sc);
+
+            %verify if the Jacobian has inf or NaN
+            if sum(sum(isnan(J) | J==inf | J==-inf))>0
+                break;%failure
+            end
+
             x = [w;sb;sc] - pinv(J)*f;
             w = x(1:2*nt);
             sb = x(2*nt+1:end-1);
@@ -109,5 +115,13 @@ while true
         itt1 = itt1-1;
     end
 
-    break;
+    LOG(nr,nt).timeList = [LOG(nr,nt).timeList,toc];
+    LOG(nr,nt).iterationList = [LOG(nr,nt).iterationList,100*(100-itt1)+100-itt2];
+    if success
+        LOG(nr,nt).converged = LOG(nr,nt).converged+1;
+        disp('SUCCESS');
+    else
+        LOG(nr,nt).diverged = LOG(nr,nt).diverged+1;
+        disp('FAILURE');
+    end
 end
