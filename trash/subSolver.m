@@ -8,7 +8,7 @@
 %ttl1: maximum number of attempts considering different initial solutions
 %ttl2: maximum number of iterations per attempt
 %tolerance: maximum value to be considered as zero
-function [v, iterations, err] = subSolver1(ZT, ZR, M, maxIt, maxP, absIr, ttl1, ttl2, tolerance)
+function [v, iterations,err,w,sb,sc,A,B,C,L] = subSolver(ZT, ZR, M, maxIt, maxP, absIr, ttl1, ttl2, tolerance)
     iterations = 0;
     %some useful definitions
     nt = length(ZT);%number of TX
@@ -31,14 +31,12 @@ function [v, iterations, err] = subSolver1(ZT, ZR, M, maxIt, maxP, absIr, ttl1, 
     B = cell(nt);
     for k=1:nt
         bk = [zeros(k-1,1);1;zeros(nt-k,1)];
-        B{k} = diag([bk;bk]);
+        B{k} = L.'*diag([bk;bk])*L;
     end
     %The coefficient matrix for the power constraint
     C = L.'*[real(Z), -imag(Z);
              zeros(nt), zeros(nt)]*L;
     
-    u = tolerance;%initial value for the barrier multiplicator
-
     while true
         success = true;
         %create an initial solution. It must respect the maximum TX amplitude and power
@@ -48,11 +46,11 @@ function [v, iterations, err] = subSolver1(ZT, ZR, M, maxIt, maxP, absIr, ttl1, 
         m1 = zeros(nt,1);
         for k=1:nt
             %(m1*w0).'*B*(m1*w0)=maxIt^2 <=> m1^2 = maxIt^2/w0'Bw0
-            m1(k) = sqrt(maxIt(k)^2/(w0.'*B{k}*w0));
+            m1(k) = sqrt((maxIt(k)^2-tolerance)/(w0.'*B{k}*w0));
         end
         %what is the maximum multiplier m2 for w=m2*w0 to respect the power constraint?
         %(m2*w0).'*C*(m2*w0)=maxP <=> m1^2 = maxP/w0'Cw0
-        m2 = sqrt(maxP/(w0.'*C*w0));
+        m2 = sqrt((maxP-tolerance)/(w0.'*C*w0));
         %getting a multiplier which guarantees both constraint sets to be satistied
         m = min(min(m1),m2);
         %getting a good initial solution
@@ -75,7 +73,7 @@ function [v, iterations, err] = subSolver1(ZT, ZR, M, maxIt, maxP, absIr, ttl1, 
         while true
             %calculating the residues (nt+nr+1 for the regular constraints and
             %nt+1 for the slack ones
-            f = zeros(nt+nr+1,1);
+            f = zeros(2*nt+nr+2,1);
             for k=1:nr
                 f(k) = w.'*A{k}*w - absIr(k)^2;
             end
@@ -84,13 +82,13 @@ function [v, iterations, err] = subSolver1(ZT, ZR, M, maxIt, maxP, absIr, ttl1, 
             end
             f(nt+nr+1) = w.'*C*w + sc - maxP;
             %slack variables
-            f(end) = -u*sum(log(tolerance/2+sb))-u*log(tolerance/2+sc);
-
-            err = mean(abs(f));
+            f(nt+nr+2:2*nt+nr+1) = tolerance*exp(sb);
+            f(end) = tolerance*exp(sc);
+            
+            err = max(abs(f));
 
             if ttl==0 || err>=merr
                 success=false;
-                u = u/2;%approach more to zero
                 break;
             end
 
@@ -101,7 +99,7 @@ function [v, iterations, err] = subSolver1(ZT, ZR, M, maxIt, maxP, absIr, ttl1, 
             %Jacobian: each line has the gradient of the k-th equation fk
             %Thus, each line is structured as follows:
             %[dfk/dw(1),...,dfk/dw(2nt),dfk/dsb(1),...,dfk/dsb(nt),dfk/dsc]
-            J = zeros(nt+nr+1,3*nt+1);
+            J = zeros(2*nt+nr+1,3*nt+1);
             for k=1:nr
                 %Ir constraint (no slack variables, so nt+1 zeros)
                 J(k,:) = [w.'*(A{k}+A{k}.'), zeros(1,nt+1)];
@@ -112,8 +110,8 @@ function [v, iterations, err] = subSolver1(ZT, ZR, M, maxIt, maxP, absIr, ttl1, 
             end
             %only the last slack variable has a non-zero derivative
             J(nt+nr+1,:) = [w.'*(C+C.'), zeros(1,nt), 1];
-            %the slack constraint
-            J(end,:) = [zeros(1,2*nt), -u./(tolerance/2+sb.'), -u/(tolerance/2+sc)];
+            %the slack constraints
+            J(nt+nr+2:end,:) = [zeros(nt+1,2*nt),diag(tolerance*exp([sb;sc]))];
 
             %next solution
             x = x - pinv(J)*f;
