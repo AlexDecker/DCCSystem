@@ -1,0 +1,8 @@
+err = 1e-6;%tolerance
+penaltyFactor = 5;%higher this value, faster the penalty function growing
+nLevels = 3;%nLevels^n=number of initial solutions
+maxIterations = 10;%max of iterations for each initial solution
+minInitials = 100;%minimal number of initial solutions
+hardnessLevel = 10;%number of solotions evaluated to get the hardest limits
+maxDim = 10;%maximum number of transmitters or receivers
+numRep = 30;

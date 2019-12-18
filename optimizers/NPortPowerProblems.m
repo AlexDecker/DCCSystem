@@ -1,9 +1,9 @@
-%the version of the problem where the solver is aware about all parameters in the
-%system. Minimize the charge time for a given WPT system or decide if it is possible
-%to finish the charging in less than t1 units of time.
-classdef NPortChargingProblem
+%the version of the problems where the solver is aware about all parameters in the
+%system. Minimize the charge time for a given WPT system or define a voltage progression
+%for ensuring all devices ramain active for at least maxTau units of time
+classdef NPortPowerProblems
     properties
-        feasiblePastModel %used to allow multiple algorithms to manage the feasiblePasts
+        feasibleFutureModel %used to allow multiple algorithms to manage the feasibleFutures
 
         %time variant data
         timeLine
@@ -34,24 +34,26 @@ classdef NPortChargingProblem
         %   *initial: vector with the initial charge of each device
         %   *threshold: vector with the minimum charge of each device at the end
         %   *maximum: the maximum charge supported by each battery
-        %deviceData: struct containing
-        %   *deviceData.rlCellArray: Lookup tables for load resistance given the SOC
-        %   *deviceData.convCellArray: Lookup tables for conversion efficiency given the input amplitude,
+        %deviceData: DeviceData object list (one for each receiver)
+        %   *rlCellArray: Lookup table for load resistance given the SOC
+        %   *convCellArray: Lookup table for DC current given the AC input amplitude,
         %   from 0A to maxCurr
+        %   *chargeCellArray: Lookup table for the effective charge current givent the
+        %   dc input (from 0A to tha max converted current)
         %constraints: struct contaning
         %   *maxCurr: vector which contains the maximum current amplitude for each device
         %   *maxPapp: maximum allowed apparent power
         %   *maxPact: maximum allowed active power
-        %feasiblePastModel: an empty object from a class which inherits from FeasiblePast which
+        %feasibleFutureModel: an empty object from a class which inherits from FeasibleFuture which
         %   is used to create new objects and manage the different algorithms according to user's will
-        function obj = NPortChargingProblem(timeLine, dt, chargeData, deviceData,...
-            constraints, feasiblePastModel)
+        function obj = NPortPowerProblems(timeLine, dt, chargeData, deviceData,...
+            constraints, feasibleFutureModel)
             obj.timeLine = timeLine;
             obj.dt = dt;
             obj.chargeData = chargeData;
             obj.deviceData = deviceData;
             obj.constraints = constraints;
-            obj.feasiblePastModel = feasiblePastModel;
+            obj.feasibleFutureModel = feasibleFutureModel;
             obj = check(obj);
         end
         %check if this object is acceptable
@@ -154,45 +156,14 @@ classdef NPortChargingProblem
                 obj.constraints.maxPact<=0
                 error('maxPact must be a real non-negative scalar.');
             end
-
-            if length(obj.deviceData.rlCellArray)~=obj.nr
-                error('deviceData.rlCellArray must have one element for each receiving device.');
-            end
-            for i=1:obj.nr
-                [n1,n2] = size(obj.deviceData.rlCellArray{i});
-                if n1<2 || n2~=2
-                    error(['Invalid deviceData.rlCellArray element: i=',num2str(i)]);
-                end
-                if obj.deviceData.rlCellArray{i}(1,1)~=0 || obj.deviceData.rlCellArray{i}(end,1)~=1 ||...
-                    sum(obj.deviceData.rlCellArray{i}(:,2)<0)>0
-                    error(['Invalid data for rlCellArray element: i=',num2str(i)]);
-                end
-                for j=2:n1
-                    if obj.deviceData.rlCellArray{i}(j,1)<obj.deviceData.rlCellArray{i}(j-1,1) ||...
-                        obj.deviceData.rlCellArray{i}(j,2)<=obj.deviceData.rlCellArray{i}(j-1,2)
-                        error(['Invalid data for rlCellArray element: i=',num2str(i)]);
-                    end
-                end
-            end
             
-            if length(obj.deviceData.convCellArray)~=obj.nr
-                error('deviceData.convCellArray must have one element for each receiving device.');
+            [n1,n2] = size(obj.deviceData);
+            if n1~=obj.nr || n2~=1
+                error('There must be one DeviceData object for each receiving device');
             end
             for i=1:obj.nr
-                [n1,n2] = size(obj.deviceData.convCellArray{i});
-                if n1<2 || n2~=2
-                    error(['Invalid deviceData.convCellArray element: i=',num2str(i)]);
-                end
-                if obj.deviceData.convCellArray{i}(1,1)~=0 ||...
-                    obj.deviceData.convCellArray{i}(end,1)~=obj.constraints.maxCurr(obj.nt+i) ||...
-                    sum(obj.deviceData.convCellArray{i}(:,2)<0)>0
-                    error(['Invalid data for deviceData.convCellArray element: i=',num2str(i)]);
-                end
-                for j=2:n1
-                    if obj.deviceData.convCellArray{i}(j,1)<obj.deviceData.convCellArray{i}(j-1,1) ||...
-                        obj.deviceData.convCellArray{i}(j,2)<obj.deviceData.convCellArray{i}(j-1,2)
-                        error(['deviceData.convCellArray must be monotonic: i=',num2str(i)]);
-                    end
+                if ~obj.deviceData(i).check()
+                    error(['Invalid deviceData at index ',num2str(i)]);
                 end
             end
         end
@@ -224,8 +195,7 @@ classdef NPortChargingProblem
                 %calculating the load resistance of each receiving device
                 Rl = [];
                 for r = 1:obj.nr
-                    Rl = [Rl; interp1(obj.deviceData.rlCellArray{r}(:,1),obj.deviceData.rlCellArray{r}(:,2),...
-                            q(r,end)/obj.chargeData.maximum(r))];
+                    Rl = [Rl; obj.deviceData(r).getRLfromSOC(q(r,end)/obj.chargeData.maximum(r))];
                 end       
                 %calculating the phasor current vector
                 current = (obj.timeLine(t).Z+diag([0;0;Rl]))\[solution(:,t);zeros(obj.nr,1)];
@@ -245,16 +215,19 @@ classdef NPortChargingProblem
                 %converting the currents
                 chargeCurrent = [];
                 for r = 1:obj.nr
-                    curr = interp1(obj.deviceData.convCellArray{r}(:,1),obj.deviceData.convCellArray{r}(:,2),...
-                        abs(current(obj.nt+r)))-obj.timeLine(t).Id(r);
-                    chargeCurrent = [chargeCurrent; curr];
+                    %the input current less the discharge current
+                    curr = obj.deviceData(r).convACDC(abs(current(obj.nt+r)))-obj.timeLine(t).Id(r);
+                    %the charge/discharge current
+                    chargeCurrent = [chargeCurrent; obj.deviceData(r).effectiveChargeCurrent(curr)];
                 end
 
                 %updating the charge vector
-                q = min(q + obj.dt*chargeCurrent, obj.chargeData.maximum);
+                q = max(...
+                        min(q + obj.dt*chargeCurrent, obj.chargeData.maximum),...
+                        obj.chargeData.minimum);
                 QLog = [QLog,q];
 
-                if sum(q<obj.chargeData.minimum)>0
+                if sum(q<=obj.chargeData.minimum)>0
                     result = 6;%there is an offline device
                     return;
                 end
@@ -266,52 +239,104 @@ classdef NPortChargingProblem
                 result = 0;%valid solution
             end
         end
-        %Decides if a given instance of the N-Port charging problem can be solved
-        %in exactly tau time slots. Returns a possible solution if it exists
-        function [solveable, solution] = solveDecisionVersion(obj, tau)
+        %Solves a given instance of the N-Port charging problem with up to maxTau time slots
+        function [solveable, solution] = solveCharging(obj)
             %some verifications
             obj = check(obj);
-            if tau>maxTau
-                error('Not enough information to test for a so large value of tau');
-            end
-            %the final charge set (which is reached if the charging process is successful)
-            targetSet = generateTarget(obj.feasiblePastModel, obj.chargeData);
-            %generate the tau-th feasible past starting from tau
-            [past,tailList] = jthFeasiblePast(obj,tau,targetSet,tau);
-            if length(tailList)~=tau-1
-                error('Invalid dimensions for tailList');
-            end
-            %the instance can be solved in exactly tau slots of time iff chargeData.initial belongs to past
-            q = search(past,obj.chargeData.initial);
-            if ~isempty(q)
+            solution = [];
+
+            %the initial state is already a valid solution?
+            if mean(obj.chargeData.initial >= obj.chargeData.threshold)==1
                 solveable = true;
-                solution = zeros(obj.nt,tau);
-                %building the solution by walking through the list of pasts
-                solution(:,1) = q.voltages;
-                for t = 1:tau
-                    q = search(tailList(t),q.next);
-                    solution(:,t+1) = q.voltages;
-                end
-            else
-                solveable = false;
-                solution = [];
+                return;
             end
+            
+            %the initial state is invalid?
+            if mean(obj.chargeData.initial < obj.chargeData.minimal)==1
+                solveable = false;
+                return;
+            end
+
+            %the final charge set (which is reached if the charging process is successful)
+            initialSet = generateInitial(obj.feasibleFutureModel, obj.chargeData);
+
+            %create the feasible futures up to the maximum number of time slots
+            fFutureList = initialSet;
+            for t=1:obj.maxTau 
+                %this function creates a set with the states which are reacheable 
+                [finalVector, fFuture] = newfeasibleFuture(obj.feasibleFutureModel,...
+                    fFutureList(end),obj.timeLine(t), obj.dt, obj.chargeData,...
+                    obj.deviceData, obj.constraints);
+                if ~isempty(finalVector)
+                    %solution found. building the voltage progression
+                    solution = finalVector;
+                    for i=length(fFutureList):-1:2 %the first element is the initial state
+                        %search for the previous element
+                        q = search(fFutureList(i),solution(1).previous);
+                        %add a column
+                        solution = [q.voltages, solution];
+                    end
+                    solveable = true;
+                    return;
+                end
+                %verify if there is at least one feasible state for the current time slot
+                if isEmpty(fFuture)
+                    break;%No, so there is no solution.
+                end
+                fFutureList = [fFutureList; fFuture];
+            end
+            %no solution found
+            solveable = false;
         end
-        %creates the j-th feasible past starting form time slot t and with the charge vector set
-        %targetSet. Returns the j-th past and the list containing the (j-1)-th, (j-2)-th, ..., 0-th past
-        function [past,tailList] = jthFeasiblePast(obj, j, targetSet, t)
-            %the 0-th past is the present   
-            if j==0
-                past = targetSet;
-                tailList = [];
+
+        %Solves a given instance of the N-Port power sourcing problem with exactly maxTau time slots
+        function [solveable, solution] = solvePowerSourcing(obj)
+            %some verifications
+            obj = check(obj);
+            solution = [];
+
+            %the initial state is already a valid solution?
+            if mean(obj.chargeData.initial >= obj.chargeData.threshold)==1
+                solveable = true;
+                return;
+            end
+            
+            %the initial state is invalid?
+            if mean(obj.chargeData.initial < obj.chargeData.minimal)==1
+                solveable = false;
+                return;
+            end
+
+            %the final charge set (which is reached if the charging process is successful)
+            initialSet = generateInitial(obj.feasibleFutureModel, obj.chargeData);
+
+            %create the feasible futures up to the maximum number of time slots
+            fFutureList = initialSet;
+            for t=1:obj.maxTau 
+                %this function creates a set with the states which are reacheable 
+                [finalVector, fFuture] = newfeasibleFuture(obj.feasibleFutureModel,...
+                    fFutureList(end),obj.timeLine(t), obj.dt, obj.chargeData,...
+                    obj.deviceData, obj.constraints);    
+                %verify if there is at least one feasible state for the current time slot
+                if isEmpty(fFuture)
+                    break;%No, so there is no solution.
+                end
+                fFutureList = [fFutureList; fFuture];
+            end
+            
+            if ~isempty(finalVector)
+                %solution found. building the voltage progression
+                solution = finalVector;
+                for i=length(fFutureList)-1:-1:2 %the first element is the initial state
+                    %search for the previous element
+                    q = search(fFutureList(i),solution(1).previous);
+                    %add a column
+                    solution = [q.voltages, solution];
+                end
+                solveable = true;
             else
-                %the immediatly anterior past (j-1 th past)
-                [past_j_1, other_past] = jthFeasiblePast(obj, j-1, targetSet, t);
-                %build the new past from the anterior
-                past_j = newFeasiblePast(obj.feasiblePastModel,past_j_1,timeLine(t-j+1),...
-                    dt, chargeData, deviceData, constraints);
-                %Now we have past_j -> past_j_1 -> other_past
-                tailList = [past_j_1, other_past];
+                %no solution found
+                solveable = false;
             end
         end
     end

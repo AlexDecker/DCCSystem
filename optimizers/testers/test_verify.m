@@ -1,60 +1,36 @@
 %This script tests the 'verify' function from NPortChargingProblem.
-
 clear all;
 
-rng('shuffle');
-
-err = 1e-5;%tolerated error
+err = 1e-6;%tolerated error
 dt=0.25;%integration interval
 nSlots = 20/dt;%number of time slots
 
-%generate continuously new test instances
-while true
+for k=1:100
     code = 0;%error code (see 'verify' method)
 
-    maxPact = 10*rand+5;%maximum active power
-    maxPapp = maxPact+20*rand;%maximum apparent power
+    maxPact = 10*rand+5;%maximum active power [5,15]
+    maxPapp = maxPact+20*rand;%maximum apparent power [5,35]
 
-    minCurr = 0.5*rand(2,1);%min current to charge
-    maxCurr = 50*rand(4,1)+1;%maximum current supported by devices
+    minCurr = 0.5*rand(2,1);%min current to charge [0,0.5]
+    maxCurr = 50*rand(4,1)+1;%maximum current supported by devices [1,50]
 
-    chargeData.minimum = rand(2,1);%lower bound
-    chargeData.initial = chargeData.minimum+rand(2,1);%in the beginnig
-    chargeData.threshold = chargeData.initial+rand(2,1);%required in the end
-    chargeData.maximum = chargeData.threshold+rand(2,1);%complete charge
+    chargeData.minimum = rand(2,1);%lower bound [0,1]
+    chargeData.initial = chargeData.minimum+rand(2,1);%in the beginnig [0,2]
+    chargeData.threshold = chargeData.initial+rand(2,1);%required in the end [0,3]
+    chargeData.maximum = chargeData.threshold+rand(2,1);%complete charge [0,4]
 
-    timeLine = [];
-    for t=1:nSlots
-        R = 3*diag(rand(4,1));
-        
-        MT = rand(2);MR = rand(2);
-        
-        ZT = R(1:2,1:2)-1i*(MT+MT'-2*diag(diag(MT)))/2;
-        ZR = R(3:4,3:4)-1i*(MR+MR'-2*diag(diag(MR)))/2;
-        M  = -1i*rand(2);
+    [rlTable1, convTable1, chargeTable1] = randomLookupTables();                            
+    [rlTable2, convTable2, chargeTable2] = randomLookupTables();                            
+    dev1 = DeviceData(rlTable1, convTable1, chargeTable1);
+    dev2 = DeviceData(rlTable2, convTable2, chargeTable2);
 
-        Z = [ZT, M.';
-             M, ZR];
+    timeLine = randomTimeLine(2,2,nSlots,[-chargeTable1(1,1);-chargeTable2(1,1)]);
 
-        slot.Z = Z;
-        slot.Id = rand(2,1);
-        timeLine = [timeLine;slot];
-    end
-
-    %data regarding the load resistance
-    rlTable = [0, 0; 1, chargeData.maximum(1)];
-    rlCellArray = {rlTable, rlTable};
-    %current conversion function
-    convCellArray = {[0,0; maxCurr(3),maxCurr(3)],...
-                    [0,0; minCurr(2)-1e-9,0; minCurr(2),minCurr(2); maxCurr(4),maxCurr(4)]};
-    deviceData.rlCellArray = rlCellArray;
-    deviceData.convCellArray = convCellArray;
-    
     constraints.maxCurr = maxCurr;
     constraints.maxPapp = maxPapp;
     constraints.maxPact = maxPact;
 
-    NPCP = NPortChargingProblem(timeLine, dt, chargeData, deviceData, constraints, FeasiblePast());
+    NPCP = NPortPowerProblems(timeLine, dt, chargeData, [dev1;dev2], constraints, FeasibleFuture());
     
     %Starting greedy algorithm
     q = chargeData.initial;%initial charges
@@ -67,8 +43,8 @@ while true
 
     for t=1:nSlots
         disp([num2str(100*t/nSlots),'%']);
-        Rl = [interp1(rlCellArray{1}(:,1),rlCellArray{1}(:,2),q(1,end)/chargeData.maximum(1));...
-            interp1(rlCellArray{2}(:,1),rlCellArray{2}(:,2),q(2,end)/chargeData.maximum(2))];
+        Rl = [interp1(rlTable1(:,1),rlTable1(:,2),q(1,end)/chargeData.maximum(1));...
+            interp1(rlTable2(:,1),rlTable2(:,2),q(2,end)/chargeData.maximum(2))];
         iZ = eye(4)/(timeLine(t).Z+diag([0;0;Rl]));
         c = [-inf;-inf];
         v = zeros(4,1);
@@ -106,19 +82,29 @@ while true
             i3 = k3*i3; v3 = k3*v3;
 
             %the charging currents
-            c0 = [interp1(convCellArray{1}(:,1),convCellArray{1}(:,2),abs(i0(3)));...
-                interp1(convCellArray{2}(:,1),convCellArray{2}(:,2),abs(i0(4)))]-...
+            c0 = [interp1(convTable1(:,1),convTable1(:,2),abs(i0(3)));...
+                interp1(convTable2(:,1),convTable2(:,2),abs(i0(4)))]-...
                 timeLine(t).Id;
-            c1 = [interp1(convCellArray{1}(:,1),convCellArray{1}(:,2),abs(i1(3)));...
-                interp1(convCellArray{2}(:,1),convCellArray{2}(:,2),abs(i1(4)))]-...
+            c1 = [interp1(convTable1(:,1),convTable1(:,2),abs(i1(3)));...
+                interp1(convTable2(:,1),convTable2(:,2),abs(i1(4)))]-...
                 timeLine(t).Id;
-            c2 = [interp1(convCellArray{1}(:,1),convCellArray{1}(:,2),abs(i2(3)));...
-                interp1(convCellArray{2}(:,1),convCellArray{2}(:,2),abs(i2(4)))]-...
+            c2 = [interp1(convTable1(:,1),convTable1(:,2),abs(i2(3)));...
+                interp1(convTable2(:,1),convTable2(:,2),abs(i2(4)))]-...
                 timeLine(t).Id;
-            c3 = [interp1(convCellArray{1}(:,1),convCellArray{1}(:,2),abs(i3(3)));...
-                interp1(convCellArray{2}(:,1),convCellArray{2}(:,2),abs(i3(4)))]-...
+            c3 = [interp1(convTable1(:,1),convTable1(:,2),abs(i3(3)));...
+                interp1(convTable2(:,1),convTable2(:,2),abs(i3(4)))]-...
                 timeLine(t).Id;
-             
+
+            %the effective charging currents
+            c0 = [interp1(chargeTable1(:,1),chargeTable1(:,2),c0(1));
+                interp1(chargeTable2(:,1),chargeTable2(:,2),c0(2))];
+            c1 = [interp1(chargeTable1(:,1),chargeTable1(:,2),c1(1));
+                interp1(chargeTable2(:,1),chargeTable2(:,2),c1(2))];
+            c2 = [interp1(chargeTable1(:,1),chargeTable1(:,2),c2(1));
+                interp1(chargeTable2(:,1),chargeTable2(:,2),c2(2))];
+            c3 = [interp1(chargeTable1(:,1),chargeTable1(:,2),c3(1));
+                interp1(chargeTable2(:,1),chargeTable2(:,2),c3(2))];
+
             %get the best charging current (only considering the active devices)
             if c0'*(q(:,end)>chargeData.minimum)>sum(c)
                 c = c0.*(q(:,end)>chargeData.minimum);
@@ -167,14 +153,17 @@ while true
     end
 
     [code2, QLog] = verify(NPCP,solution);
-    %figure;
-    %hold on;
-    %plot(QLog.','-');
-    %plot(q.','--');
-    %legend('result A','result B','reference A','reference B');
+    %{
+    figure;
+    hold on;
+    plot(QLog.','-');
+    plot(q.','--');
+    plot((chargeData.minimum.*ones(2,length(q))).','.r');
+    plot((chargeData.maximum.*ones(2,length(q))).','.g');
+    legend('result A','result B','reference A','reference B');
+    %}
+    disp(['reference code: ',num2str(code),', result code: ',num2str(code2)]);
     if code~=code2
         error('Incompatible return code');
-    else
-        disp('Return codes do match!');
     end
 end
