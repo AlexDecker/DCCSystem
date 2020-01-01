@@ -21,15 +21,24 @@ classdef CloudHash
         %maxQ: maximum values for each q position (inclusive)
 		%So, minQ<Q<=maxQ
         function obj = CloudHash(hashSize, nSegments, minQ, maxQ)
+			if ~isscalar(nSegments) | nSegments<10 | nSegments>255
+				error('nSegments must be a scalar between 10 and 255');
+			end
             obj.nSegments = nSegments;
+			if sum(minQ<0)>0 | sum(minQ>maxQ)
+				error('0<=minQ<=maxQ');
+			end
             obj.minQ = minQ;
             obj.maxQ = maxQ;
+			if ~isscalar(hashSize) | hashSize<1
+				error('Invalid hashSize');
+			end
 			%generating a weight vector for random projection
             r = rand(1,length(minQ));
 			obj.weightVector = (hashSize-1)/(sum(r)*(nSegments-1))*r;
             %create an empty hash
             for i=1:hashSize
-                obj.hash{i}.D = zeros(length(minQ),0);
+                obj.hash{i}.D = zeros(length(minQ),0,'uint8');
                 obj.hash{i}.DATA = [];
             end
         end
@@ -79,7 +88,7 @@ classdef CloudHash
             %find the entry in the hash
             h = obj.hashFunction(d);
             %find the element in the hash entry
-            i = find(sum(obj.hash{h}.D==d*ones(1,obj.len(h))));
+            i = find(mean(obj.hash{h}.D==d*ones(1,obj.len(h)))==1);
             found = ~isempty(i);
         end
     end
