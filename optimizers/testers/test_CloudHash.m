@@ -21,6 +21,7 @@ sides = (maxQ-minQ)/nSegments;
 MB = [];
 TIME_OK = [];
 TIME_FAIL = zeros(2,0);
+TIME_DUM = zeros(2,0);
 
 %a list of vectors inside the hash
 s=0;
@@ -28,7 +29,7 @@ MEMO = zeros(nr,0);
 
 %for memory usage sake, v = q.^2 and q0 = sqrt(q), so they
 %do not need to be explicitly stored
-MAX = 1000;
+MAX = 5000;
 while s<MAX
 	%insert a new vector-------------------------------
 	%generating a new discretized vector
@@ -50,9 +51,13 @@ while s<MAX
 	data.v = q.^2;
 	data.q0 = sqrt(q);
 	%Has the vector already been inserted?
+	tic;
 	i = find(mean(MEMO==d*ones(1,s))==1);
+	TIME_DUM = [TIME_DUM,[s;toc]];
 	if isempty(i)
+		tic;
 		MEMO = [MEMO,d];%insert into the memory
+		TIME_DUM(2,end) = TIME_DUM(2,end)+toc;
 		tic;
 		[cloud,success] = insert(cloud,data);
 		TIME_OK = [TIME_OK;toc];
@@ -96,6 +101,7 @@ figure;
 hold on;
 plot(TIME_OK);
 plot(TIME_FAIL(1,:),TIME_FAIL(2,:));
+plot(TIME_DUM(1,:),TIME_DUM(2,:));
 ylabel('s');
 xlabel('Numeber of elements');
 title('Insertion time');
