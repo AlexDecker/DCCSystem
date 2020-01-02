@@ -35,7 +35,7 @@ classdef CloudHash
 			end
 			%generating a weight vector for random projection
             r = rand(1,length(minQ));
-			obj.weightVector = (hashSize-1)/(sum(r)*(nSegments-1))*r;
+			obj.weightVector = 10000*(hashSize-1)/(sum(r)*(nSegments-1))*r;
             %create an empty hash
             for i=1:hashSize
                 obj.hash{i}.D = zeros(length(minQ),0,'uint8');
@@ -104,7 +104,7 @@ classdef CloudHash
 
         %deterministic hash function based on Random projection.
         function h = hashFunction(obj,d)
-            h = round(obj.weightVector*d)+1;
+            h = mod(round(obj.weightVector*d),length(obj.hash))+1;
         end
     end
 end

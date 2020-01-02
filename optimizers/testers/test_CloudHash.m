@@ -29,7 +29,7 @@ MEMO = zeros(nr,0);
 
 %for memory usage sake, v = q.^2 and q0 = sqrt(q), so they
 %do not need to be explicitly stored
-MAX = 5000;
+MAX = 1000;
 while s<MAX
 	%insert a new vector-------------------------------
 	%generating a new discretized vector
@@ -69,6 +69,13 @@ while s<MAX
 		if cloud.size()~=s
 			error('The size did not change correctly after the insertion');
 		end
+
+        %log the size of the hash in Mega Bytes
+        w = whos('cloud');
+        MB = [MB;w.bytes/1000000];
+        if mod(s,ceil(MAX/100))==0
+            disp([num2str(100*s/MAX),'%']);
+        end
 	else
 		%try to insert and get an error
 		tic;
@@ -83,12 +90,6 @@ while s<MAX
 		end
 	end
 	
-	%log the initial size of the hash in Mega Bytes
-	w = whos('cloud');
-	MB = [MB;w.bytes/1000000];
-	if mod(s,ceil(MAX/100))==0
-		disp([num2str(100*s/MAX),'%']);
-	end
 end
 
 figure;
@@ -105,7 +106,7 @@ plot(TIME_DUM(1,:),TIME_DUM(2,:));
 ylabel('s');
 xlabel('Numeber of elements');
 title('Insertion time');
-legend('OK','FAIL');
+legend('OK','FAIL','DUMMIE');
 
 L=[];
 for i=1:hashSize
