@@ -5,7 +5,8 @@ minQ = rand(nr,1);
 maxQ = minQ + rand(nr,1);
 nSegments = 100;
 hashSize = 1000;
-cloud = CloudHash(hashSize, nSegments, minQ, maxQ);
+MAX = 100000;
+cloud = CloudHash(hashSize, nSegments, minQ, maxQ, MAX);
 
 %calculating each side of the minimal unity of charge
 sides = (maxQ-minQ)/nSegments;
@@ -29,7 +30,6 @@ MEMO = zeros(nr,0);
 
 %for memory usage sake, v = q.^2 and q0 = sqrt(q), so they
 %do not need to be explicitly stored
-MAX = 1000;
 while s<MAX
 	%insert a new vector-------------------------------
 	%generating a new discretized vector
@@ -47,9 +47,8 @@ while s<MAX
 	r = rand(nr,1);
 	q = q0.*r+(1-r).*q1;
 	%prepare the data to be inserted
-	data.q = q;
-	data.v = q.^2;
-	data.q0 = sqrt(q);
+    v = q.^2;
+	q0 = sqrt(q);
 	%Has the vector already been inserted?
 	tic;
 	i = find(mean(MEMO==d*ones(1,s))==1);
@@ -59,7 +58,7 @@ while s<MAX
 		MEMO = [MEMO,d];%insert into the memory
 		TIME_DUM(2,end) = TIME_DUM(2,end)+toc;
 		tic;
-		[cloud,success] = insert(cloud,data);
+		[cloud,success] = insert(cloud,q,v,q0);
 		TIME_OK = [TIME_OK;toc];
 		if ~success
 			error('Insertion error');
@@ -73,13 +72,11 @@ while s<MAX
         %log the size of the hash in Mega Bytes
         w = whos('cloud');
         MB = [MB;w.bytes/1000000];
-        if mod(s,ceil(MAX/100))==0
-            disp([num2str(100*s/MAX),'%']);
-        end
+        
 	else
 		%try to insert and get an error
 		tic;
-		[cloud,success] = insert(cloud,data);
+		[cloud,success] = insert(cloud,q,v,q0);
 		TIME_FAIL = [TIME_FAIL,[s;toc]];
 		if success
 			error('Success for inserting rather than the expected failure');
@@ -89,7 +86,9 @@ while s<MAX
 			error('The size changed after an insertion failure');
 		end
 	end
-	
+	if mod(s,ceil(MAX/1000))==0
+        disp([num2str(100*s/MAX),'%']);
+    end
 end
 
 figure;
@@ -106,7 +105,7 @@ plot(TIME_DUM(1,:),TIME_DUM(2,:));
 ylabel('s');
 xlabel('Numeber of elements');
 title('Insertion time');
-legend('OK','FAIL','DUMMIE');
+legend('search+insert','search','dummie_search');
 
 L=[];
 for i=1:hashSize
@@ -116,3 +115,7 @@ figure;
 plot(L);
 xlabel('Entry');
 title('Number of elements per hash entry');
+figure;
+histogram(L);
+xlabel('Number of elements per entry');
+title('Collisions histogram');

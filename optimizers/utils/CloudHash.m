@@ -2,10 +2,19 @@
 %The space is divided into homogeneous small sub-spaces (hyper-
 %cubes), where at most one point can be stored.
 
+%The hash function uses random projection to reduce the dimensionality
+%of the vector.
+
+%The data related to the point is stored in auxiliar vectors for
+%efficiency reasons.
+
 classdef CloudHash
     properties(GetAccess=public,SetAccess=private)
 	
-        hash
+        hash %used for quickly finding elements
+        LEN %number of elements currently stored
+        Q0 %list of previous charge vectors
+        V %list of voltages
         nSegments
         minQ
         maxQ
@@ -20,7 +29,8 @@ classdef CloudHash
         %minQ: minimum values for each q position (exclusive)
         %maxQ: maximum values for each q position (inclusive)
 		%So, minQ<Q<=maxQ
-        function obj = CloudHash(hashSize, nSegments, minQ, maxQ)
+        %maxSize: maximum number of elements for the hash
+        function obj = CloudHash(hashSize, nSegments, minQ, maxQ, maxSize)
 			if ~isscalar(nSegments) | nSegments<10 | nSegments>255
 				error('nSegments must be a scalar between 10 and 255');
 			end
@@ -33,39 +43,61 @@ classdef CloudHash
 			if ~isscalar(hashSize) | hashSize<1
 				error('Invalid hashSize');
 			end
+
 			%generating a weight vector for random projection
             r = rand(1,length(minQ));
 			obj.weightVector = 10000*(hashSize-1)/(sum(r)*(nSegments-1))*r;
+
             %create an empty hash
+            obj.hash = [];
             for i=1:hashSize
-                obj.hash{i}.D = zeros(length(minQ),0,'uint8');
-                obj.hash{i}.DATA = [];
+                e.D = zeros(length(minQ),5*ceil(maxSize/hashSize),'uint8');
+                e.INDEX = zeros(1,5*ceil(maxSize/hashSize),'uint32');
+                e.LEN = 0;
+                obj.hash = [obj.hash;e];
             end
+
+            %initializating the arrays where the data is effectively stored
+            obj.LEN = 0;
+            obj.Q0 = zeros(length(minQ),maxSize);
+            obj.V = zeros(length(minQ),maxSize);
         end
 
         %insert a value in the hash. return true if it was effectively
         %inserted, false if there was already an entry in the hash
         %close enough to q (thus it was not inserted).
-        %data: struct with the fields
-			%.q:actual charge vector
-            %.v:voltage vector
-            %.q0:previous charge vector
-        function [obj,ret] = insert(obj,data)
-            [found,h,~,d] = obj.search(data.q);
+        %q:actual charge vector
+        %v:voltage vector
+        %q0:previous charge vector
+        function [obj,ret] = insert(obj,q,v,q0)
+            [found,h,~,d] = obj.search(q);
             if found
 				%do nothing
                 ret = false;
             else
-				%insert the new entry
-                obj.hash{h}.D = [obj.hash{h}.D, d];
-                obj.hash{h}.DATA = [obj.hash{h}.DATA, data];
+				%insert the new row into the arrays
+                obj.LEN = obj.LEN+1;
+                obj.Q0(:,obj.LEN) = q0;
+                obj.V(:,obj.LEN)  = v;
+
+                i = obj.hash(h).LEN+1; %the new index in the h hash entry
+                if i>length(obj.hash(h).INDEX)%if out of bounds
+                    %duplicate the allocated size
+                    obj.hash(h).D = [obj.hash(h).D, obj.hash(h).D];
+                    obj.hash(h).INDEX = [obj.hash(h).INDEX, obj.hash(h).INDEX];
+                end
+                %effectively insert the new entry
+                obj.hash(h).D(:,i) = d;
+                obj.hash(h).INDEX(i) = length(obj.LEN);
+                obj.hash(h).LEN = i;
+
                 ret = true;
             end
         end
 
         %get the number of elements inside the h-th hash entry
         function n = len(obj,h)
-            n = length(obj.hash{h}.DATA);
+            n = obj.hash(h).LEN;
         end
 		
 		%get the total number of elements inside the object
@@ -74,11 +106,16 @@ classdef CloudHash
 			for h=1:length(obj.hash)
 				s = s+obj.len(h);
 			end
+            if s~=obj.LEN
+                error('Uncompatible data about the size of the hash');
+            end
 		end
 
         %read an entry given the indices hash(h) and inside the hash entry(i)
-        function data = read(obj, h, i)
-            data = obj.hash{h}.DATA(:,i);
+        function [D,Q0,V] = read(obj, h, i)
+            D = obj.hash(h).D(:,i);
+            Q0 = obj.Q0(:,obj.hash(h).INDEX(i));
+            V = obj.V(:,obj.hash(h).INDEX(i));
         end
 
         %search a given vector q in the hash. return the hash index, the index
@@ -88,12 +125,18 @@ classdef CloudHash
             %find the entry in the hash
             h = obj.hashFunction(d);
             %find the element in the hash entry
-            i = find(mean(obj.hash{h}.D==d*ones(1,obj.len(h)))==1);
-            found = ~isempty(i);
+            l = obj.hash(h).LEN;
+            if l>0
+                i = find(mean(obj.hash(h).D(:,1:l)==d*ones(1,l))==1);
+                found = ~isempty(i);
+            else
+                i=[];
+                found=false;
+            end
         end
     end
 	
-    methods(Access=private)
+    methods(Access=public)
         
         %returns the representation of charge vector q considering
         %the sub-spaces indexing. The returned vector has always
