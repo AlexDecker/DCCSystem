@@ -11,20 +11,21 @@ for k=1:100
     maxPact = 10*rand+5;%maximum active power [5,15]
     maxPapp = maxPact+20*rand;%maximum apparent power [5,35]
 
-    minCurr = 0.5*rand(2,1);%min current to charge [0,0.5]
-    maxCurr = 50*rand(4,1)+1;%maximum current supported by devices [1,50]
 
     chargeData.minimum = rand(2,1);%lower bound [0,1]
     chargeData.initial = chargeData.minimum+rand(2,1);%in the beginnig [0,2]
     chargeData.threshold = chargeData.initial+rand(2,1);%required in the end [0,3]
     chargeData.maximum = chargeData.threshold+rand(2,1);%complete charge [0,4]
 
-    [rlTable1, convTable1, chargeTable1] = randomLookupTables();                            
-    [rlTable2, convTable2, chargeTable2] = randomLookupTables();                            
+    [rlTable1, convTable1, chargeTable1, maxId1, maxIn1] = randomLookupTables();                            
+    [rlTable2, convTable2, chargeTable2, maxId2, maxIn2] = randomLookupTables();                            
     dev1 = DeviceData(rlTable1, convTable1, chargeTable1);
     dev2 = DeviceData(rlTable2, convTable2, chargeTable2);
 
-    timeLine = randomTimeLine(2,2,nSlots,[-chargeTable1(1,1);-chargeTable2(1,1)]);
+    timeLine = randomTimeLine(2,2,nSlots,[maxId1;maxId2]);
+
+    minCurr = 0.5*rand(2,1);%min current to charge [0,0.5]
+    maxCurr = [50*rand(2,1)+1;maxIn1;maxIn2];%maximum current supported by devices [1,50]
 
     constraints.maxCurr = maxCurr;
     constraints.maxPapp = maxPapp;
