@@ -2,12 +2,6 @@
 %The space is divided into homogeneous small sub-spaces (hyper-
 %cubes), where at most one point can be stored.
 
-%The hash function uses random projection to reduce the dimensionality
-%of the vector.
-
-%The data related to the point is stored in auxiliar vectors for
-%efficiency reasons.
-
 classdef CloudHash
     properties(GetAccess=public,SetAccess=private)
 	
@@ -18,7 +12,6 @@ classdef CloudHash
         nSegments
         minQ
         maxQ
-        weightVector
 		
     end
 	
@@ -43,10 +36,6 @@ classdef CloudHash
 			if ~isscalar(hashSize) | hashSize<1
 				error('Invalid hashSize');
 			end
-
-			%generating a weight vector for random projection
-            r = rand(1,length(minQ));
-			obj.weightVector = 10000*(hashSize-1)/(sum(r)*(nSegments-1))*r;
 
             %create an empty hash
             obj.hash = [];
@@ -145,9 +134,13 @@ classdef CloudHash
             d = ceil(obj.nSegments*(q-obj.minQ)./(obj.maxQ-obj.minQ))-1;
         end
 
-        %deterministic hash function based on Random projection.
+        %deterministic hash function based on polynomial rolling hash function
         function h = hashFunction(obj,d)
-            h = mod(round(obj.weightVector*d),length(obj.hash))+1;
+            v = 0;
+            for i=1:length(d)
+                v = v*97+d(i);
+            end
+            h = mod(v,length(obj.hash))+1;
         end
     end
 end

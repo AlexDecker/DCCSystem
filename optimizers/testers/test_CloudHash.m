@@ -4,8 +4,8 @@ nr = 10;
 minQ = rand(nr,1);
 maxQ = minQ + rand(nr,1);
 nSegments = 100;
-hashSize = 1000;
-MAX = 100000;
+hashSize = 997;
+MAX = 10000;
 cloud = CloudHash(hashSize, nSegments, minQ, maxQ, MAX);
 
 %calculating each side of the minimal unity of charge
