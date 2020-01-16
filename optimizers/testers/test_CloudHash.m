@@ -1,23 +1,26 @@
-clear all;
 %Test file for CloudHash.
 nr = 10;
+nt = 15;
 minQ = rand(nr,1);
 maxQ = minQ + rand(nr,1);
 nSegments = 100;
-hashSize = 997;
-MAX = 10000;
-cloud = CloudHash(hashSize, nSegments, minQ, maxQ, MAX);
+hashSize = 99991;
+MAX = 100000;
+cloud = CloudHash(hashSize, nSegments, minQ, maxQ, MAX, nt);
 
-%calculating each side of the minimal unity of charge
-sides = (maxQ-minQ)/nSegments;
-%thus, a vector discretized as d correspond to the q vectors
-%resulting from the convex linear combination of the following
-%vectors (excluding q0 itself)
-%q0 = minQ+d.*sides
-%q1 = minQ+(d+1).*sides
+%discretization tools
+
+V = rand(nt,nr);%projection matrix to easily verify the values of the returned v from q
+minV = zeros(nt,1);
+maxV = (nSegments-1)*V*ones(nr,1);
+volt_conv = CloudHash(1, 255, minV, maxV, 0, nt);%just for discretizing v
+
+Q0 = rand(nr,nr);%projection matrix to easily verify the values of the returned q0 from q
+minQ0 = zeros(nr,1);
+maxQ0 = (nSegments-1)*Q0*ones(nr,1);
+q0_conv = CloudHash(1, nSegments, minQ0, maxQ0, 0, nt);%just for discretizing q0
 
 %functions to be verified: read, size, search and insert
-
 
 MB = [];
 TIME_OK = [];
@@ -28,7 +31,7 @@ TIME_DUM = zeros(2,0);
 s=0;
 MEMO = zeros(nr,0);
 
-%for memory usage sake, v = q.^2 and q0 = sqrt(q), so they
+%for memory usage sake, v = V*d and q0 = Q0*d, so they
 %do not need to be explicitly stored
 while s<MAX
 	%insert a new vector-------------------------------
@@ -40,27 +43,29 @@ while s<MAX
 		%try to generate a effectively new vector
 		d = round(rand(nr,1)*(nSegments-1));
 	end
-	%0.1% tolerance: the limits for the new charge vetor
-	q0 = minQ+(d+0.001).*sides;
-	q1 = minQ+(d+0.999).*sides;
 	%generating a random vector based on d
-	r = rand(nr,1);
-	q = q0.*r+(1-r).*q1;
+    [q1,q2] = cloud.dediscretize(d);
+	r = rand(nr,1)*0.999;%guarantee r~=1
+	q = q1.*r+(1-r).*q2;
 	%prepare the data to be inserted
-    v = q.^2;
-	q0 = sqrt(q);
+    v = volt_conv.discretize(V*d);
+	d0 = q0_conv.discretize(Q0*d);
 	%Has the vector already been inserted?
 	tic;
 	i = find(mean(MEMO==d*ones(1,s))==1);
-	TIME_DUM = [TIME_DUM,[s;toc]];
+	TIME_DUM = [TIME_DUM,[s;(2+nt/nr)*toc]];%log spent time
+    %(the penality is because Q0 and V do not have storage cost for dummie)
+
 	if isempty(i)
 		tic;
 		MEMO = [MEMO,d];%insert into the memory
 		TIME_DUM(2,end) = TIME_DUM(2,end)+toc;
 		tic;
-		[cloud,success] = insert(cloud,q,v,q0);
-		TIME_OK = [TIME_OK;toc];
-		if ~success
+        [found,~,~,~] = cloud.search(d);
+		cloud = insert(cloud,d,v,d0);
+        final = toc;
+		TIME_OK = [TIME_OK;final];
+		if found
 			error('Insertion error');
 		end
 		s = s+1;
@@ -76,9 +81,9 @@ while s<MAX
 	else
 		%try to insert and get an error
 		tic;
-		[cloud,success] = insert(cloud,q,v,q0);
+		[found,~,~,~] = cloud.search(d);
 		TIME_FAIL = [TIME_FAIL,[s;toc]];
-		if success
+		if ~found
 			error('Success for inserting rather than the expected failure');
 		end
 		%verify if size increased
