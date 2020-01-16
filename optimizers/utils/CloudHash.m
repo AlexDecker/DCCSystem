@@ -7,7 +7,7 @@
 
 classdef CloudHash
     properties(Constant)
-        collision_factor = 5 %factor for the maximum allowed number of collisions
+        collision_factor = 3 %factor for the maximum allowed number of collisions
         initial_pool_size = 100 %initial size for the pools
     end
     properties(GetAccess=public,SetAccess=private)
@@ -22,13 +22,15 @@ classdef CloudHash
         LEN %a vector with the number of elements per hash entry
         D0 %has the same structure of hash, but stores the DO vectors
         V  %has the same structure of hash, but stores the V vectors
+        A  %boolean value attached to each d vector
 
         %to handle escessive collisions
         pn %number of elements in the POOL
         ps %maximum number of elements in the POOL
         POOL_D %suppose index d
         POOL_D0 %the vector POOL_Q0(:,d) refers to d
-        POOL_V %POOL_V(:,d) as well
+        POOL_V %POOL_V(:,id) as well
+        POOL_A %as well
 
         %for building the discretized version of q
         nSegments
@@ -58,6 +60,7 @@ classdef CloudHash
             obj.LEN = zeros(obj.s,1,'uint8');
             obj.D0 = zeros(obj.nr,obj.s*obj.c,'uint8');
             obj.V = zeros(obj.nt,obj.s*obj.c,'uint8');
+            obj.A = false(obj.s,obj.c);
 
             %initializating the pools
             obj.pn = 0;
@@ -65,6 +68,7 @@ classdef CloudHash
             obj.POOL_D = zeros(obj.nr,obj.initial_pool_size,'uint8');
             obj.POOL_D0 = zeros(obj.nr,obj.initial_pool_size,'uint8');
             obj.POOL_V = zeros(obj.nt,obj.initial_pool_size,'uint8');
+            obj.POOL_A = false(1, obj.initial_pool_size);
         end
         
         %insert a value which is not already inside the hash
@@ -75,9 +79,10 @@ classdef CloudHash
 				%do not fit in the hash
                 if obj.pn==obj.ps
                     %resize the pool
-                    obj.POOL_D = [obj.POOL_D,zeros(obj.nr,obj.ps)];
-                    obj.POOL_D0 = [obj.POOL_D0,zeros(obj.nr,obj.ps)];
-                    obj.POOL_V = [obj.POOL_V,zeros(obj.nt,obj.ps)];
+                    obj.POOL_D = [obj.POOL_D,zeros(obj.nr,obj.ps,'uint8')];
+                    obj.POOL_D0 = [obj.POOL_D0,zeros(obj.nr,obj.ps,'uint8')];
+                    obj.POOL_V = [obj.POOL_V,zeros(obj.nt,obj.ps,'uint8')];
+                    obj.POOL_A = [obj.POOL_A,false(1,obj.ps)];
                     obj.ps = obj.ps*2;
                 end
                 obj.pn = obj.pn+1;
@@ -149,6 +154,41 @@ classdef CloudHash
                 j=[];
                 pj = [];
                 found=false;
+            end
+        end
+
+        %annotate a discrete vector d with 'true'
+        function obj = annotate(obj,d)
+            [found,h,j,pj] = obj.search(d);
+            if found
+                if isempty(pj)
+                    obj.A(h,j)=true;
+                else
+                    obj.POOL_A(pj) = true;
+                end
+            end
+        end
+
+        %create a smaller structure with only the signed vectors
+        function small = compact(obj)
+            %calculate the number of elements of 'small'
+            n = sum(uint32(obj.A))+sum(uint32(POOL_A));
+            %new size for the hash
+            s = ceil(obj.s/n);
+            %creating the new object
+            small = CloudHash(s,obj.nSegments,obj.minQ,obj.maxQ,n,obj.nt);
+            %add the elements in the hash
+            for h=1:obj.s
+                for i=1:obj.LEN(h)
+                    if obj.A(h,i)
+                        
+                    end
+                end
+            end
+            %add the elements in the pool
+            for i=1:obj.pn
+                if POOL_A(i)
+                end
             end
         end
     end

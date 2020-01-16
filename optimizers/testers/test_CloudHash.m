@@ -1,10 +1,10 @@
 %Test file for CloudHash.
-nr = 10;
-nt = 15;
+nr = 5;
+nt = 6;
 minQ = rand(nr,1);
 maxQ = minQ + rand(nr,1);
 nSegments = 100;
-hashSize = 99991;
+hashSize = 49999;
 MAX = 100000;
 cloud = CloudHash(hashSize, nSegments, minQ, maxQ, MAX, nt);
 
