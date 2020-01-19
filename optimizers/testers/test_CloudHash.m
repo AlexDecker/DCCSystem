@@ -4,8 +4,8 @@ nt = 6;
 minQ = rand(nr,1);
 maxQ = minQ + rand(nr,1);
 nSegments = 100;
-hashSize = 49999;
-MAX = 100000;
+hashSize = 997;
+MAX = 5000;
 cloud = CloudHash(hashSize, nSegments, minQ, maxQ, MAX, nt);
 
 %discretization tools
