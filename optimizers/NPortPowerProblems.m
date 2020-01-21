@@ -213,7 +213,7 @@ classdef NPortPowerProblems
                 %calculating the load resistance of each receiving device
                 Rl = [];
                 for r = 1:obj.nr
-                    Rl = [Rl; obj.deviceData(r).getRLfromSOC(q(r,end)/...
+                    Rl = [Rl; obj.deviceData(r).getRLfromSOC(q(r)/...
 						obj.chargeData.maximum(r))];
                 end       
                 %calculating the phasor current vector
@@ -244,9 +244,7 @@ classdef NPortPowerProblems
                 end
 
                 %updating the charge vector
-                q = max(...
-                        min(q + obj.dt*chargeCurrent, obj.chargeData.maximum),...
-                        obj.chargeData.minimum);
+                q = min(q + obj.dt*chargeCurrent, obj.chargeData.maximum);
                 QLog = [QLog,q];
 
                 if sum(q<=obj.chargeData.minimum)>0

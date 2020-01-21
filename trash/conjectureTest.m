@@ -20,7 +20,9 @@ chargeData.maximum = 10*rand(nr,1);
 dev = DeviceData(rlTable, convTable, chargeTable);
 
 %generating the current consumption of the time slot and the environment parameters
-slot = randomTimeLine(nt,nr,1,maxId*ones(nr,1));
+s=0.5;%sparsity
+d=0.5;%dynamicity
+slot = randomTimeLine(nt,nr,1,maxId*ones(nr,1),s,d);
 
 %sub-matrices of Z
 ZT = slot.Z(1:nt,1:nt);

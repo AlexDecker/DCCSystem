@@ -24,6 +24,7 @@ function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
 	
 	%charge vector
 	q = chargeData.initial;
+    qLog = q;
 	
 	%integrating...
 	for t=1:nSlots
@@ -31,7 +32,7 @@ function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
 		Rl = [];
 		for r = 1:nr
 			Rl = [Rl; deviceData.getRLfromSOC(...
-				q(r,end)/chargeData.maximum(r))];
+				q(r)/chargeData.maximum(r))];
 		end
 		%greedy solution. Generate a sample of currents and choose the element
 		%which maximizes the efficiency
@@ -64,7 +65,7 @@ function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
 		chargeCurrent = [];
 		for r = 1:nr
 			%the input current less the discharge current
-			curr = deviceData.convACDC(abs(current(nt+r)))-...
+			curr = deviceData.convACDC(abs(I(nt+r)))-...
 				timeLine(t).Id(r);
 			%the charge/discharge current
 			chargeCurrent = [chargeCurrent;...
@@ -73,13 +74,20 @@ function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
 
 		%updating the charge vector
 		q = min(q + dt*chargeCurrent, chargeData.maximum);
+        qLog = [qLog,q];
 
-		chargeData.minimum = min(q,chargeData.minimum);
+		chargeData.minimum = min(q-1e-6,chargeData.minimum);
+
 		if sum(chargeData.minimum<0)>0
 			success = false;
 			return;
 		end
 	end
-	
-	chargeData.threshold = q;
+
+	%make the problem easier
+    chargeData.minimum = 0.9*chargeData.minimum;
+	chargeData.threshold = 0.9*(q-chargeData.minimum)+chargeData.minimum;
+    constraints.maxPapp = (1.1)*constraints.maxPapp;
+    constraints.maxPact = (1.1)*constraints.maxPact;
+    constraints.maxCurr = (1.1)*constraints.maxCurr;
 end

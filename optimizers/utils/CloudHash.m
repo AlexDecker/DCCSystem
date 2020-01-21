@@ -181,13 +181,14 @@ classdef CloudHash
             for h=1:obj.s
                 for i=1:obj.LEN(h)
                     if obj.A(h,i)
-                        
+                       %TODO 
                     end
                 end
             end
             %add the elements in the pool
             for i=1:obj.pn
                 if POOL_A(i)
+                    small = small.insert(POOL_D(:,i),POOL_V(:,i),POOL_D0(:,i));
                 end
             end
         end

@@ -21,8 +21,10 @@ for k=1:100
     [rlTable2, convTable2, chargeTable2, maxId2, maxIn2] = randomLookupTables();                            
     dev1 = DeviceData(rlTable1, convTable1, chargeTable1);
     dev2 = DeviceData(rlTable2, convTable2, chargeTable2);
-
-    timeLine = randomTimeLine(2,2,nSlots,[maxId1;maxId2]);
+    
+    s = rand;%sparsity
+    d = rand;%dynamicity
+    timeLine = randomTimeLine(2,2,nSlots,[maxId1;maxId2],s,d);
 
     minCurr = 0.5*rand(2,1);%min current to charge [0,0.5]
     maxCurr = [50*rand(2,1)+1;maxIn1;maxIn2];%maximum current supported by devices [1,50]
