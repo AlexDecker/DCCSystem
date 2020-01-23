@@ -5,11 +5,12 @@ dt = 1;
 maxV = 15;
 sampleSize = 100;%the higher this value, the higher the difficulty
 
-for i=1:1000
+for i=1:1
     s = rand;%sparsity
     d = rand;%dynamicity
     
-    ffModel = FeasibleFuture();    
+    ffModel = FFDummie();
+
     [P, sol] = randomInstance(nt,nr,nSlots,dt,maxV,sampleSize,s,d,ffModel);
     [result, ~] = P.verify(sol);
 

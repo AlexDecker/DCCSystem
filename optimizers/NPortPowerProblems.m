@@ -262,8 +262,10 @@ classdef NPortPowerProblems
         %Solves a given instance of the N-Port charging problem with up to maxTau 
 		%time slots
         function [solveable, solution] = solveCharging(obj)
+
             %some verifications
             obj = check(obj);
+
             solution = [];
 
             %the initial state is already a valid solution?
@@ -273,42 +275,52 @@ classdef NPortPowerProblems
             end
             
             %the initial state is invalid?
-            if mean(obj.chargeData.initial < obj.chargeData.minimal)==1
+            if mean(obj.chargeData.initial <= obj.chargeData.minimal)==1
                 solveable = false;
                 return;
             end
 
-            %the final charge set (which is reached if the charging process is 
-			%successful)
+            %the initial charge set (unitary set)
             initialSet = generateInitial(obj.feasibleFutureModel, obj.chargeData);
 
             %create the feasible futures up to the maximum number of time slots
             fFutureList = initialSet;
+
             for t=1:obj.maxTau 
                 %this function creates a set with the states which are reacheable 
-                [finalVector, fFuture]=newfeasibleFuture(obj.feasibleFutureModel,...
+                [finalElement, fFuture]=newfeasibleFuture(obj.feasibleFutureModel,...
                     fFutureList(end),obj.timeLine(t), obj.dt, obj.chargeData,...
                     obj.deviceData, obj.constraints);
-                if ~isempty(finalVector)
+
+                if ~isempty(finalElement)
                     %solution found. building the voltage progression
-                    solution = finalVector;
+                    element = finalElement;
+                    solution = element.voltage;
+
                     for i=length(fFutureList):-1:2 %the first element is the 
 					%initial state
+
                         %search for the previous element
-                        q = search(fFutureList(i),solution(1).previous);
+                        element = search(fFutureList(i),element.previous);
+
                         %add a column
-                        solution = [q.voltages, solution];
+                        solution = [element.voltages, solution];
                     end
+
                     solveable = true;
                     return;
                 end
+
                 %verify if there is at least one feasible state for the current 
 				%time slot
                 if isEmpty(fFuture)
-                    break;%No, so there is no solution.
+                    solveable = false;
+                    return;%No, so there is no solution.
                 end
+
                 fFutureList = [fFutureList; fFuture];
             end
+
             %no solution found
             solveable = false;
         end
@@ -316,51 +328,53 @@ classdef NPortPowerProblems
         %Solves a given instance of the N-Port power sourcing problem with exactly 
 		%maxTau time slots
         function [solveable, solution] = solvePowerSourcing(obj)
+
             %some verifications
             obj = check(obj);
             solution = [];
 
-            %the initial state is already a valid solution?
-            if mean(obj.chargeData.initial >= obj.chargeData.threshold)==1
-                solveable = true;
-                return;
-            end
-            
             %the initial state is invalid?
             if mean(obj.chargeData.initial < obj.chargeData.minimal)==1
                 solveable = false;
                 return;
             end
 
-            %the final charge set (which is reached if the charging process is 
-			%successful)
+            %the initial charge set (unitary)
             initialSet = generateInitial(obj.feasibleFutureModel, obj.chargeData);
 
             %create the feasible futures up to the maximum number of time slots
             fFutureList = initialSet;
             for t=1:obj.maxTau 
-                %this function creates a set with the states which are reacheable 
-                [finalVector, fFuture]=newfeasibleFuture(obj.feasibleFutureModel,...
+                %this function creates a set with the states which are reacheable
+                %from the previous one
+                [finalElement, fFuture]=newfeasibleFuture(obj.feasibleFutureModel,...
                     fFutureList(end),obj.timeLine(t), obj.dt, obj.chargeData,...
                     obj.deviceData, obj.constraints);    
+
                 %verify if there is at least one feasible state for the current 
 				%time slot
-                if isEmpty(fFuture)
-                    break;%No, so there is no solution.
+                if isEmpty(fFiuture)
+                    solveable = false;
+                    return;%No, so there is no solution.
                 end
+
                 fFutureList = [fFutureList; fFuture];
             end
             
             if ~isempty(finalVector)
-                %solution found. building the voltage progression
-                solution = finalVector;
+                %solution found. building the voltage progression matrix
+                element = finalVector;
+                solution = element.voltage;
+
                 for i=length(fFutureList)-1:-1:2 %the first element is the initial 
-				%state
+				%state. Go back through the time slots annotating the employied
+                %voltages
                     %search for the previous element
-                    q = search(fFutureList(i),solution(1).previous);
+                    element = search(fFutureList(i),element.previous);
                     %add a column
-                    solution = [q.voltages, solution];
+                    solution = [element.voltage, solution];
                 end
+
                 solveable = true;
             else
                 %no solution found

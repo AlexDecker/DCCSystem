@@ -97,14 +97,9 @@ classdef CloudHash
                 obj.V(:,i) = v;
             end
         end
-
-        %get the number of elements inside the h-th hash entry
-        function n = len(obj,h)
-            n = obj.LEN(h);
-        end
 		
 		%get the total number of elements inside the object
-		function s = size(obj)
+		function s = countElements(obj)
 			s = sum(obj.LEN);
 		end
 
@@ -191,6 +186,35 @@ classdef CloudHash
                     small = small.insert(POOL_D(:,i),POOL_V(:,i),POOL_D0(:,i));
                 end
             end
+        end
+
+        %choose any charge vector to return
+        function Q = any(obj)
+            
+            if obj.countElements()==0
+                error('CloudHash.any: the object is empty')
+            end
+
+            h = randi(obj.s);%get any entry
+
+            %get the next one until reaching a non-empty entry
+            while obj.LEN(h)==0
+                h=h+1;
+            end
+
+            j = randi(obj.LEN(h));%get any element from the entry
+
+            if j>obj.c
+                %get any element from the pool
+                [D,~,~] = obj.readFromPool(randi(obj.ps));
+            else
+                %get the element from the hash
+                [D,~,~] = obj.read(h,j);
+            end
+            
+            %estimate the original charge vectors
+            [Q_0,Q_1] = obj.dediscretize(D);
+            Q = (Q_0+Q_1)/2;%get the centroid of the possible vector space
         end
     end
 	
