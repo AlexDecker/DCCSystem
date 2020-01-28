@@ -70,7 +70,7 @@ while s<MAX
 		end
 		s = s+1;
 		%verify if size increased
-		if cloud.size()~=s
+		if cloud.countElements()~=s
 			error('The size did not change correctly after the insertion');
 		end
 
@@ -87,7 +87,7 @@ while s<MAX
 			error('Success for inserting rather than the expected failure');
 		end
 		%verify if size increased
-		if cloud.size()~=s
+		if cloud.countElements()~=s
 			error('The size changed after an insertion failure');
 		end
 	end
@@ -114,7 +114,7 @@ legend('search+insert','search','dummie_search');
 
 L=[];
 for i=1:hashSize
-	L = [L;cloud.len(i)];
+	L = [L;cloud.LEN(i)];
 end
 figure;
 plot(L);

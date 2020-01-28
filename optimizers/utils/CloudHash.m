@@ -7,7 +7,7 @@
 
 classdef CloudHash
     properties(Constant)
-        collision_factor = 3 %factor for the maximum allowed number of collisions
+        collision_factor = 1 %factor for the maximum allowed number of collisions
         initial_pool_size = 100 %initial size for the pools
     end
     properties(GetAccess=public,SetAccess=private)
@@ -16,6 +16,8 @@ classdef CloudHash
         c %maximum number of collisions inside the hash
         nr %number of positions of the key
         nt %number of positions of V
+
+        multiplier %for the hash function
         
         %hashes
         D %the hash with the key (n x s*c)
@@ -46,12 +48,26 @@ classdef CloudHash
 		%So, minQ<Q<=maxQ
         %nt: size of V
         function obj = CloudHash(hashSize, nSegments, minQ, maxQ, maxSize, nt)
+            if nSegments<2
+                error('CloudHash: the number of segments must be at least 2');
+            end
             obj.nSegments = nSegments;
             obj.minQ = minQ;
             obj.maxQ = maxQ;
+            
+            %the actual hashSize is the largest prime less than or equal to hashSize
+            %for better performance
+            p = primes(hashSize);
+            if length(p)>0
+                hashSize = p(end);
+            end
+            %the multiplier of the hash function must also be the closest prime to
+            %the number of segments
+            p = primes(obj.nSegments);
+            obj.multiplier = p(end);
 
             obj.s = hashSize;
-            obj.c = obj.collision_factor*ceil(maxSize/hashSize);
+            obj.c = ceil(obj.collision_factor*maxSize/hashSize);
             obj.nr = length(minQ);
             obj.nt = nt;
 
@@ -127,10 +143,13 @@ classdef CloudHash
             %find the element in the hash entry
             l = obj.LEN(h);
             if l>0
+                %valid length of the entry
+                len = min(double(l),obj.c);
                 %calculating the limits of the entry
-                i0 = (h-1)*obj.c+1;
-                i1 = i0+double(obj.LEN(h))-1;
-                j = find(mean(obj.D(:,i0:i1)==d*ones(1,l))==1);
+                i0 = (h-1)*obj.c + 1;
+                i1 = i0 + len - 1;
+                %searching in the hash entry
+                j = find(mean(obj.D(:,i0:i1)==d*ones(1,len))==1);
                 if isempty(j)
                     if l>obj.c %the pool is guaranteed to not be empty
                         %it may be in the pool
@@ -244,7 +263,7 @@ classdef CloudHash
         function h = hashFunction(obj,d)
             v = 0;
             for i=1:length(d)
-                v = v*97+d(i);
+                v = v*obj.multiplier+d(i);
             end
             h = mod(v,obj.s)+1;
         end
