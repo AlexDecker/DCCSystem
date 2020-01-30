@@ -48,8 +48,9 @@ classdef FFDummie < FeasibleFuture
                 %number of failures: number of times when no vector was inserted due
                 %it has already been inserted or minK>maxK
                 consecutive_failures_top = 0;
+                successes_top = 0;
                 %generate a set of new states parting from Q
-                while consecutive_failures_top < obj.thr_top
+                while consecutive_failures_top < obj.thr_top && successes_top < obj.maxSize
                     %the base voltage
                     v_base = rand(obj.nt,1);
                     %the base current
@@ -62,7 +63,7 @@ classdef FFDummie < FeasibleFuture
                     else
                         successes = 0;
                         consecutive_failures = 0;
-                        while consecutive_failures < obj.thr
+                        while consecutive_failures < obj.thr && successes_top < obj.maxSize
                             %create a new future state
                             K = rand*(maxK-minK) + minK;
                             V = K*v_base;
@@ -76,6 +77,7 @@ classdef FFDummie < FeasibleFuture
                             else
                                 %no, so insert it
                                 successes = successes+1;
+                                successes_top = successes_top+1;
                                 consecutive_failures = 0;
                                 cloud = cloud.insert(D,V,D0);
                             end
