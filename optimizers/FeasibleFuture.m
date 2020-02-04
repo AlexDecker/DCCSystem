@@ -19,7 +19,7 @@ classdef FeasibleFuture
         %in 'new' whose charge vector is more then the threshold, it must be returned
         %as 'final'. If there is more than one element, the function must choose one
         %of them according to user's will.
-        function new = newFeasibleFuture(obj, initialSet, timeSlot, dt,...
+        function [final,new] = newFeasibleFuture(obj, initialSet, timeSlot, dt,...
             chargeData, deviceData, constraints)
             new = [];
             final = [];

@@ -25,7 +25,7 @@ classdef FFDummie < FeasibleFuture
             obj.cloud = [];
         end
         
-        function new = newFeasibleFuture(obj, initialSet, timeSlot, dt,...
+        function [final, new] = newFeasibleFuture(obj, initialSet, timeSlot, dt,...
             chargeData, deviceData, constraints)
             
             %creating the cloud to store the generated points

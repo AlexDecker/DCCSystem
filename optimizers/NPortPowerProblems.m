@@ -1,4 +1,4 @@
-%the version of the problems where the solver is aware about all parameters in the
+%the versions of the problems where the solver is aware about all parameters in the
 %system. Minimize the charge time for a given WPT system or define a voltage progression
 %for ensuring all devices ramain active for at least maxTau units of time
 classdef NPortPowerProblems
@@ -18,6 +18,9 @@ classdef NPortPowerProblems
 
         %general constraints (not regarding charge)
         constraints
+
+        %if true, print debug information
+        verbose
     end
     properties(Access=private)
         n %number of devices
@@ -60,6 +63,7 @@ classdef NPortPowerProblems
             obj.deviceData = deviceData;
             obj.constraints = constraints;
             obj.feasibleFutureModel = feasibleFutureModel;
+            obj.verbose = false;
             obj = check(obj);
         end
         %check if this object is acceptable
@@ -185,8 +189,7 @@ classdef NPortPowerProblems
                 end
             end
         end
-        %Verify if a given solution is valid
-        %Result values:
+        %Verify if a given solution is valid. Possible result values:
         %0: valid
         %1: incompatible size
         %2: unreached charge threshold
@@ -197,28 +200,37 @@ classdef NPortPowerProblems
         %solution: ntxtime matrix with the transmitting voltages of each time slot
         function [result, QLog] = verify(obj, solution)
             obj = check(obj);
-            
+
             %charge vector
             q = obj.chargeData.initial;
             QLog = q;
 
             [nt, time] = size(solution);
-            if nt~=obj.nt || time==0
+            if nt~=obj.nt
                 result = 1;
                 return;
             end
-            
+
+            if time==0
+                %it is only possible if the devices start charged
+                if mean(obj.chargeData.initial>obj.chargeData.threshold)==1
+                    result = 0;%ok, valid
+                else
+                    result = 2;%unreached
+                end
+            end
+
             %integrating...
             for t=1:time
                 %calculating the load resistance of each receiving device
                 Rl = [];
                 for r = 1:obj.nr
                     Rl = [Rl; obj.deviceData(r).getRLfromSOC(q(r)/...
-						obj.chargeData.maximum(r))];
-                end       
+                        obj.chargeData.maximum(r))];
+                end
                 %calculating the phasor current vector
                 current = (obj.timeLine(t).Z+diag([zeros(nt,1);Rl]))\...
-					[solution(:,t);zeros(obj.nr,1)];
+                    [solution(:,t);zeros(obj.nr,1)];
                 %verifying some constraints
                 if sum(abs(current)>obj.constraints.maxCurr)>0
                     result = 3;
@@ -237,10 +249,10 @@ classdef NPortPowerProblems
                 for r = 1:obj.nr
                     %the input current less the discharge current
                     curr = obj.deviceData(r).convACDC(abs(current(obj.nt+r)))-...
-						obj.timeLine(t).Id(r);
+                        obj.timeLine(t).Id(r);
                     %the charge/discharge current
                     chargeCurrent = [chargeCurrent;...
-						obj.deviceData(r).effectiveChargeCurrent(curr)];
+                        obj.deviceData(r).effectiveChargeCurrent(curr)];
                 end
 
                 %updating the charge vector
@@ -259,127 +271,11 @@ classdef NPortPowerProblems
                 result = 0;%valid solution
             end
         end
-        %Solves a given instance of the N-Port charging problem with up to maxTau 
-		%time slots
-        function [solveable, solution] = solveCharging(obj)
 
-            %some verifications
-            obj = check(obj);
-
-            solution = [];
-
-            %the initial state is already a valid solution?
-            if mean(obj.chargeData.initial >= obj.chargeData.threshold)==1
-                solveable = true;
-                return;
-            end
-            
-            %the initial state is invalid?
-            if mean(obj.chargeData.initial <= obj.chargeData.minimal)==1
-                solveable = false;
-                return;
-            end
-
-            %the initial charge set (unitary set)
-            initialSet = generateInitial(obj.feasibleFutureModel, obj.chargeData);
-
-            %create the feasible futures up to the maximum number of time slots
-            fFutureList = initialSet;
-
-            for t=1:obj.maxTau 
-                %this function creates a set with the states which are reacheable 
-                [finalElement, fFuture]=newfeasibleFuture(obj.feasibleFutureModel,...
-                    fFutureList(end),obj.timeLine(t), obj.dt, obj.chargeData,...
-                    obj.deviceData, obj.constraints);
-
-                if ~isempty(finalElement)
-                    %solution found. building the voltage progression
-                    element = finalElement;
-                    solution = element.voltage;
-
-                    for i=length(fFutureList):-1:2 %the first element is the 
-					%initial state
-
-                        %search for the previous element
-                        element = search(fFutureList(i),element.previous);
-
-                        %add a column
-                        solution = [element.voltages, solution];
-                    end
-
-                    solveable = true;
-                    return;
-                end
-
-                %verify if there is at least one feasible state for the current 
-				%time slot
-                if isEmpty(fFuture)
-                    solveable = false;
-                    return;%No, so there is no solution.
-                end
-
-                fFutureList = [fFutureList; fFuture];
-            end
-
-            %no solution found
+        %Dummie implementation
+        function [solveable, solution] = solve(obj)
             solveable = false;
-        end
-
-        %Solves a given instance of the N-Port power sourcing problem with exactly 
-		%maxTau time slots
-        function [solveable, solution] = solvePowerSourcing(obj)
-
-            %some verifications
-            obj = check(obj);
             solution = [];
-
-            %the initial state is invalid?
-            if mean(obj.chargeData.initial < obj.chargeData.minimal)==1
-                solveable = false;
-                return;
-            end
-
-            %the initial charge set (unitary)
-            initialSet = generateInitial(obj.feasibleFutureModel, obj.chargeData);
-
-            %create the feasible futures up to the maximum number of time slots
-            fFutureList = initialSet;
-            for t=1:obj.maxTau 
-                %this function creates a set with the states which are reacheable
-                %from the previous one
-                [finalElement, fFuture]=newfeasibleFuture(obj.feasibleFutureModel,...
-                    fFutureList(end),obj.timeLine(t), obj.dt, obj.chargeData,...
-                    obj.deviceData, obj.constraints);    
-
-                %verify if there is at least one feasible state for the current 
-				%time slot
-                if isEmpty(fFiuture)
-                    solveable = false;
-                    return;%No, so there is no solution.
-                end
-
-                fFutureList = [fFutureList; fFuture];
-            end
-            
-            if ~isempty(finalVector)
-                %solution found. building the voltage progression matrix
-                element = finalVector;
-                solution = element.voltage;
-
-                for i=length(fFutureList)-1:-1:2 %the first element is the initial 
-				%state. Go back through the time slots annotating the employied
-                %voltages
-                    %search for the previous element
-                    element = search(fFutureList(i),element.previous);
-                    %add a column
-                    solution = [element.voltage, solution];
-                end
-
-                solveable = true;
-            else
-                %no solution found
-                solveable = false;
-            end
         end
     end
 end

@@ -1,4 +1,4 @@
-%Generates a random instance of the NPortPowerProblems with a guaranteed solution sol
+%Generates a random instance of the NPortSourcingProblem with a guaranteed solution "sol"
 %nt: number of transmitters
 %nr: number of receivers
 %nSlots: number of time slots
@@ -7,7 +7,7 @@
 %sampleSize: size of the sample used for the greedy voltage progression (see randomConstraints)
 %sparsity and dynamicity: for controlling the timeLine (see randomTimeLine)
 %ffModel: empty instance of the chosen feasible future model
-function [inst,sol] = randomInstance(nt,nr,nSlots,dt,maxV,sampleSize,sparsity,dynamicity,ffModel)
+function [inst,sol] = randomSourcingInstance(nt,nr,nSlots,dt,maxV,sampleSize,sparsity,dynamicity,ffModel)
     [rlTable,convTable,chargeTable,maxId,maxIn] = randomLookupTables();
 
     deviceData = DeviceData(rlTable,convTable,chargeTable);
@@ -26,5 +26,5 @@ function [inst,sol] = randomInstance(nt,nr,nSlots,dt,maxV,sampleSize,sparsity,dy
     for r=1:nr
         devList = [devList; deviceData];
     end
-    inst = NPortPowerProblems(timeLine,dt,chargeData,devList,constraints,ffModel); 
+    inst = NPortSourcingProblem(timeLine,dt,chargeData,devList,constraints,ffModel); 
 end
