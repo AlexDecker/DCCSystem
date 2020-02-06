@@ -10,8 +10,11 @@ sampleSize = 100;%the higher this value, the higher the difficulty
 hashSize = 1000;
 nSegments = 100;
 maxSize = 10000;
-thr_top = 100;
+thr_top = 10;
 thr = 10;
+thr_down = 10;
+ttl = 1000;
+ttl_down = 1000;
 
 found_solutions = 0;
 
@@ -19,16 +22,16 @@ for i=1:1
     s = rand;%sparsity
     d = rand;%dynamicity
     
-    ffModel = FFDummie(hashSize, nSegments, maxSize, thr_top, thr, nt, nr);
+    ffModel = FFDummie(hashSize, nSegments, maxSize, thr_top, thr, thr_down, ttl, ttl_down, nt, nr);
 
-    [P, reference_solution] = randomInstance(nt,nr,nSlots,dt,maxV,sampleSize,s,d,ffModel);
+    [P, reference_solution] = randomSourcingInstance(nt,nr,nSlots,dt,maxV,sampleSize,s,d,ffModel);
     [result, ~] = P.verify(reference_solution);
 
     if result~=0
         error(['RandomInstance: error number ',num2str(result)]);
     end
 
-    [solveable, solution] = P.solveCharging();
+    [solveable, solution] = P.solve();
 
     if solveable
         found_solutions = found_solutions + 1;

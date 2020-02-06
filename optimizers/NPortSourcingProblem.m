@@ -18,13 +18,13 @@ classdef NPortSourcingProblem < NPortPowerProblems
             solution = [];
 
             %the initial state is invalid?
-            if mean(obj.chargeData.initial > obj.chargeData.minimal)~=1
+            if mean(obj.chargeData.initial > obj.chargeData.minimum)~=1
                 solveable = false;
                 return;
             end
 
             %the initial charge set (unitary)
-            initialSet = generateInitial(obj.feasibleFutureModel, obj.chargeData);
+            initialSet = generateInitialSet(obj.feasibleFutureModel, obj.chargeData);
 
             %create the feasible futures up to the maximum number of time slots
             fFutureList = initialSet;

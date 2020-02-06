@@ -30,11 +30,10 @@ classdef FeasibleFuture
             initial = [];
         end
         
-        %search a given charge vector in the set, returning a structure containing
-        %the following fields:
-        %   * charge: the chargeVector itself
+        %search a given discretized charge vector in the set, returning a structure
+        %containing the following fields:
         %   * voltages: the active voltage vector to turn previous into q
-        %   * previous: the charge vector from the initial set
+        %   * previous: the discretized charge vector from the initial set
         function q = search(obj, chargeVector)
             q = [];
         end

@@ -31,7 +31,7 @@ classdef NPortChargingProblem < NPortPowerProblems
             end
 
             %the initial charge set (unitary set)
-            initialSet = generateInitial(obj.feasibleFutureModel, obj.chargeData);
+            initialSet = generateInitialSet(obj.feasibleFutureModel, obj.chargeData);
 
             %create the feasible futures up to the maximum number of time slots
             fFutureList = initialSet;
