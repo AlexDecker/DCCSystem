@@ -92,6 +92,7 @@ classdef CloudHash
             h = obj.hashFunction(d);
             obj.LEN(h) = obj.LEN(h)+1;
             if obj.LEN>obj.c
+                disp('Isso mermo');
 				%do not fit in the hash
                 if obj.pn==obj.ps
                     %resize the pool

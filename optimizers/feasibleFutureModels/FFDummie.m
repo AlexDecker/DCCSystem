@@ -57,7 +57,7 @@ classdef FFDummie < FeasibleFuture
             successes_top = 0;
             while consecutive_failures_top < obj.thr_top && successes_top < obj.maxSize
                 %get any element
-                Q0 = initialSet.any();
+                Q0 = initialSet.cloud.any();
 
                 Rl = FFDummie.calculateLoadResistances(Q0, deviceData, chargeData);
                 
@@ -140,6 +140,15 @@ classdef FFDummie < FeasibleFuture
                     consecutive_failures_top = consecutive_failures_top + 1;
                 end
             end
+            
+            disp(['New feasible future with ',num2str(cloud.countElements()), ' elements.']);
+
+            %build the object
+            new = FFDummie(obj.hashSize, obj.nSegments, obj.maxSize, obj.thr_top, obj.thr,...
+                obj.thr_down, obj.ttl, obj.ttl_down, obj.nt, obj.nr)
+
+            %insert the cloud into the object
+            new.cloud = cloud;
         end
         
         function initial = generateInitialSet(obj, chargeData)
@@ -149,10 +158,14 @@ classdef FFDummie < FeasibleFuture
 
             %insert the initial state
             d = cloud.discretize(chargeData.initial);
-            cloud = cloud.insert(d,zeros(obj.nr,1),zeros(obj.nr,1));
+            cloud = cloud.insert(d,zeros(obj.nt,1),zeros(obj.nr,1));
 
             %build the object
-            initial = FFDummie(1, obj.nSegments, 1, obj.nt, obj.nr)
+            initial = FFDummie(1, obj.nSegments, 1, obj.thr_top, obj.thr, obj.thr_down,...
+                obj.ttl, obj.ttl_down, obj.nt, obj.nr);
+
+            %insert the cloud into the object
+            initial.cloud = cloud;
         end
         
         %search a given discretized charge vector in the set, returning a

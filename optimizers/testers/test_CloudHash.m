@@ -73,11 +73,16 @@ while s<MAX
 		if cloud.countElements()~=s
 			error('The size did not change correctly after the insertion');
 		end
-
+        
         %log the size of the hash in Mega Bytes
         w = whos('cloud');
         MB = [MB;w.bytes/1000000];
         
+        %test if the elements was inserted IN FACT
+        [found,~,~,~] = cloud.search(d);
+        if ~found
+            error('Insertion error!!');
+        end
 	else
 		%try to insert and get an error
 		tic;

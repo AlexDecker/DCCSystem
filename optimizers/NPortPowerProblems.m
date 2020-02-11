@@ -22,7 +22,7 @@ classdef NPortPowerProblems
         %if true, print debug information
         verbose
     end
-    properties(Access=private)
+    properties(SetAccess=private, GetAccess=public)
         n %number of devices
         nt %number of transmitting devices
         nr %number of receiving devices
