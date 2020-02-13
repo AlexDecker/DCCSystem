@@ -91,7 +91,7 @@ classdef CloudHash
         function obj = insert(obj,d,v,d0)
             h = obj.hashFunction(d);
             obj.LEN(h) = obj.LEN(h)+1;
-            if obj.LEN>obj.c
+            if obj.LEN(h)>obj.c
                 disp('Isso mermo');
 				%do not fit in the hash
                 if obj.pn==obj.ps
