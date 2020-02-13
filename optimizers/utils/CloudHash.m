@@ -92,7 +92,6 @@ classdef CloudHash
             h = obj.hashFunction(d);
             obj.LEN(h) = obj.LEN(h)+1;
             if obj.LEN(h)>obj.c
-                disp('Isso mermo');
 				%do not fit in the hash
                 if obj.pn==obj.ps
                     %resize the pool
@@ -103,15 +102,15 @@ classdef CloudHash
                     obj.ps = obj.ps*2;
                 end
                 obj.pn = obj.pn+1;
-                obj.POOL_D(:,obj.pn) = d;
-                obj.POOL_D0(:,obj.pn) = d0;
-                obj.POOL_V(:,obj.pn) = v;
+                obj.POOL_D(:,obj.pn) = uint8(d);
+                obj.POOL_D0(:,obj.pn) = uint8(d0);
+                obj.POOL_V(:,obj.pn) = uint8(v);
             else
 				%insert the new elements into the right entry
                 i = (h-1)*obj.c+double(obj.LEN(h));
-                obj.D(:,i) = d;
-                obj.D0(:,i) = d0;
-                obj.V(:,i) = v;
+                obj.D(:,i) = uint8(d);
+                obj.D0(:,i) = uint8(d0);
+                obj.V(:,i) = uint8(v);
             end
         end
 		
@@ -123,16 +122,16 @@ classdef CloudHash
         %read an entry given the indices hash(h) and inside the hash entry(j)
         function [D,D0,V] = read(obj, h, j)
             i = (h-1)*obj.c+j;
-            D = obj.D(:,i);
-            D0 = obj.D0(:,i);
-            V = obj.V(:,i);
+            D = double(obj.D(:,i));
+            D0 = double(obj.D0(:,i));
+            V = double(obj.V(:,i));
         end
 
         %read from the collision pool
         function [D,D0,V] = readFromPool(obj,j)
-            D = obj.POOL_D(:,i);
-            D0 = obj.POOL_D0(:,i);
-            V = obj.POOL_V(:,i);
+            D = double(obj.POOL_D(:,i));
+            D0 = double(obj.POOL_D0(:,i));
+            V = double(obj.POOL_V(:,i));
         end
 
         %search a given discretized vector d in the hash. return the hash index,

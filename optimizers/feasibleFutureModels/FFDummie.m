@@ -37,6 +37,8 @@ classdef FFDummie < FeasibleFuture
         function [final, new] = newFeasibleFuture(obj, initialSet, timeSlot, dt,...
             chargeData, deviceData, constraints)
             
+            final = [];
+
             %creating the cloud to store the generated points
             cloud = CloudHash(obj.hashSize, obj.nSegments, chargeData.minimum,...
                 chargeData.maximum, obj.maxSize, obj.nt);
@@ -66,7 +68,7 @@ classdef FFDummie < FeasibleFuture
                     timeSlot.Id, dt);
 
                 %inverse of the impedance matrix
-                iZ = eye(obj.nt+obj.nr)\(timeSlot.Z+diag(Rl));
+                iZ = eye(obj.nt+obj.nr)\(timeSlot.Z+diag([zeros(obj.nt,1);Rl]));
                 
                 %number of failures: number of times when no vector was inserted due
                 %it has already been inserted or minK>maxK
@@ -145,7 +147,7 @@ classdef FFDummie < FeasibleFuture
 
             %build the object
             new = FFDummie(obj.hashSize, obj.nSegments, obj.maxSize, obj.thr_top, obj.thr,...
-                obj.thr_down, obj.ttl, obj.ttl_down, obj.nt, obj.nr)
+                obj.thr_down, obj.ttl, obj.ttl_down, obj.nt, obj.nr);
 
             %insert the cloud into the object
             new.cloud = cloud;
@@ -194,27 +196,56 @@ classdef FFDummie < FeasibleFuture
     methods(Static)
         function Rl = calculateLoadResistances(Q, deviceData, chargeData)
             %calculating the load resistance of each receiving device
-			Rl = zeros(obj.nr);
-			for r = 1:obj.nr
-				Rl(r) = obj.deviceData(r).getRLfromSOC(q(r)/...
-					obj.chargeData.maximum(r));
+			Rl = zeros(length(Q),1);
+			for r = 1:length(Q)
+                SOC = Q(r)/chargeData.maximum(r);
+				Rl(r) = deviceData(r).getRLfromSOC(SOC);
 			end 
         end
 
-        function minIr = calculateMinIr(Q0, deviceData, chargeData, Ir, dt)
+        function minIr = calculateMinIr(Q0, deviceData, chargeData, Id, dt)
             %minimal receiving amplitude for each device to stay alive (exclusive)
-            minIr = zeros(obj.nr,1);
-            for r=1:obj.nr
-                %minimal charge current
-                ic = (chargeData.minimum-Q0)/dt;
-                %minimal input current (after powering the device)
-                input = deviceData(r).iEffectiveChargeCurrent(ic);
-                %minimal receiving current amplitude
-                minIr = deviceData(r).iConvACDC(input+id);
+            minIr = zeros(length(Q0),1);
+            for r=1:length(Q0)
+                
+                %maximum input current the system is able to provide
+                maxIn = deviceData(r).convACDC(deviceData(r).maxReceivingCurrent());
+
+                %maximum charging current the system is able to provide
+                %(considering Id as the discharge current)
+                maxIc = deviceData(r).effectiveChargeCurrent(maxIn-Id(r));
+
+                %minimal charge current (exclusive)
+                ic = (chargeData.minimum(r)-Q0(r))/dt;
+
+                if ic >= maxIc
+                    %impossible to provide
+                    minIr(r) = inf;
+                else
+                    if ic < -Id(r)
+                        %trivial (even if there is no receiving current the device is ok)
+                        minIr(r) = -inf;
+                    else
+                        %minimal input current
+                        input = deviceData(r).iEffectiveChargeCurrent(ic) + Id(r);
+                        if input >= maxIn
+                            %impossible to provide
+                            minIr(r) = inf;
+                        else
+                            if input < 0
+                                %trivial, since the output of the conversion is non-negative
+                                minIr(r) = -inf;
+                            else
+                                %minimal receiving current amplitude
+                                minIr(r) = deviceData(r).iConvACDC(input+id);
+                            end
+                        end
+                    end
+                end
             end
             %transforming the limit from exclusive to inclusive by adding a very small
             %tolerance value
-            minIr = minIr + obj.tolerance;
+            minIr = minIr + FFDummie.tolerance;
             %avoid negative "amplitudes"
             minIr = max(0, minIr);
         end

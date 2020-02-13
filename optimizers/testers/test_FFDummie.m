@@ -26,7 +26,6 @@ for i=1:1
 
     [P, reference_solution] = randomSourcingInstance(nt,nr,nSlots,dt,maxV,sampleSize,s,d,ffModel);
     [result, ~] = P.verify(reference_solution);
-
     if result~=0
         error(['RandomInstance: error number ',num2str(result)]);
     end

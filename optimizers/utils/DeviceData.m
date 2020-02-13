@@ -95,10 +95,16 @@ classdef DeviceData
             end
             rl = interp1(obj.rlTable(:,1),obj.rlTable(:,2),SOC);
         end
+        
+        %maximum allowed receiving current for this device
+        function m = maxReceivingCurrent(obj)
+            m = obj.convTable(end,1);
+        end
+
         %get the DC current from an AC input
-        function out = convACDC(obj,input);
+        function out = convACDC(obj,input)
             input = abs(input);
-            if input>obj.convTable(end,1) || input<obj.convTable(1,1)
+            if input>obj.maxReceivingCurrent() || input<obj.convTable(1,1)
                 error('convACDC: input out of limits');
             end
             out = interp1(obj.convTable(:,1),obj.convTable(:,2),input);
@@ -107,7 +113,7 @@ classdef DeviceData
         %battery for a given DC input current (out-discharge_current). Input
         %is required to be more than the discharge current and less than the
         %maximum converted output current
-        function ic = effectiveChargeCurrent(obj,input);
+        function ic = effectiveChargeCurrent(obj,input)
             if imag(input)~=0
                 error('effectiveChargeCurrent: input must be real');
             end
