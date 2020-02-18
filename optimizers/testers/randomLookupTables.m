@@ -1,5 +1,9 @@
 %generate random parameters for DeviceData objects
 function [rlTable,convTable,chargeTable,maxId,maxIn] = randomLookupTables()
+    
+    %probability of the next function segment to be constant
+    p = 0.2;
+
     %building a valid RL table
     rlTable = [0, rand];
     while true
@@ -17,7 +21,7 @@ function [rlTable,convTable,chargeTable,maxId,maxIn] = randomLookupTables()
     num = 10*rand+1;
     while num>0
         in = convTable(end,1)+rand+0.01;
-        if rand<0.2
+        if rand < p
             out = convTable(end,2);
         else
             out = convTable(end,2)+rand*(in-convTable(end,2));
@@ -29,23 +33,26 @@ function [rlTable,convTable,chargeTable,maxId,maxIn] = randomLookupTables()
     %building a valid charge table
     chargeTableNeg = [0,0];%the non-positive part
     chargeTablePos = [0,0];%the non-negative part
+    outNeg = 0;
+    outPos = 0;
     while true
         inNeg = chargeTableNeg(1,1)-rand-0.01;
         inPos = chargeTablePos(end,1)+rand+0.01;
-        if rand<0.2
-            outNeg = chargeTableNeg(1,2);%constant part of the curve
+        if rand < p
+            outNeg = min(inNeg, outNeg);%constant (if possible) part of the curve
         else
-            outNeg = inNeg+rand*(chargeTableNeg(1,2)-inNeg);
+            %otherwise, generates a value that guarantees the curve is monothonically increasing
+            %and upper bounded by the input value (you lose more charge than the one provided to
+            %the device)
+            outNeg = (rand+1)*min(inNeg, outNeg);
         end
         
         chargeTableNeg = [inNeg, outNeg; chargeTableNeg];
+
         %the input is limited to the maximum converted current
-        if inPos>=convTable(end,2) 
-            if rand<0.2
-                outPos = chargeTablePos(end,2);
-            else
-                outPos = chargeTablePos(end,2)+...
-                    rand*(convTable(end,2)-chargeTablePos(end,2));
+        if inPos >= convTable(end,2) 
+            if rand < 1-p
+                outPos = outPos + rand*(convTable(end,2) - outPos);
             end
             %if the maximum is 0, it may be ommited, since 0 is already guaranteed
             if convTable(end,2)>0
@@ -53,10 +60,8 @@ function [rlTable,convTable,chargeTable,maxId,maxIn] = randomLookupTables()
             end
             break;
         else
-            if rand<0.2
-                outPos = chargeTablePos(end,2);
-            else
-                outPos = chargeTablePos(end,2)+rand*(inPos-chargeTablePos(end,2));
+            if rand < 1-p
+                outPos = outPos + rand*(inPos - outPos);
             end
             chargeTablePos = [chargeTablePos; inPos, outPos];
         end

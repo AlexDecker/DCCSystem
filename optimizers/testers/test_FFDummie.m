@@ -1,6 +1,6 @@
 %general arguments
-nr = 5;
-nt = 6;
+nr = 2;
+nt = 2;
 nSlots = 10;
 dt = 1;
 maxV = 15;
@@ -17,8 +17,9 @@ ttl = 1000;
 ttl_down = 1000;
 
 found_solutions = 0;
+n_instances = 100;
 
-for i=1:1
+for i=1:n_instances
     s = rand;%sparsity
     d = rand;%dynamicity
     
@@ -48,4 +49,3 @@ for i=1:1
 end
 
 disp(['Effectiveness (0-1): ', num2str(found_solutions/n_instances)])
-disp('Finished. SUCCESS');

@@ -10,7 +10,7 @@
 %   converted current)
 
 classdef DeviceData
-    properties(Access=private)
+    properties(Access=public)
 		rlTable
 		convTable
         chargeTable
@@ -69,19 +69,19 @@ classdef DeviceData
             end
             %the domain must be from the maximum discharge amplitude to the 
             %maximum charge amplitude. The output must have the same signal
-            %as the input (or be zero) and its amplitude must be less or equal
-            %to the amplitude of the input.
-            if obj.chargeTable(1,1)>=0 ||...
-                obj.chargeTable(end,1)~=obj.convTable(end,2) ||...
-                sum(abs(obj.chargeTable(:,1))<abs(obj.chargeTable(:,2)))>0 || ...
-                sum(obj.chargeTable(:,2)~=0 & ...
-                    sign(obj.chargeTable(:,1))~=sign(obj.chargeTable(:,2)))>0
+            %as the input (or be zero) and it must be less or equal
+            %to the the input (not in absolute value)
+            if obj.chargeTable(1,1) >= 0 ||...
+                obj.chargeTable(end,1) ~= obj.convTable(end,2) ||...
+                sum(obj.chargeTable(:,1) < obj.chargeTable(:,2)) > 0 ||...
+                sum(obj.chargeTable(:,2) ~= 0 &...
+                    sign(obj.chargeTable(:,1)) ~= sign(obj.chargeTable(:,2))) > 0
                 disp('Invalid data for chargeTable');
                 b = false;return;
             end
             for j=2:n1
-                if obj.chargeTable(j,1)<=obj.chargeTable(j-1,1) ||...
-                    obj.chargeTable(j,2)<obj.chargeTable(j-1,2)
+                if obj.chargeTable(j,1) <= obj.chargeTable(j-1,1) ||...
+                    obj.chargeTable(j,2) < obj.chargeTable(j-1,2)
                     disp('chargeTable must be monotonically increasing');
                     b = false;return;
                 end
@@ -105,7 +105,9 @@ classdef DeviceData
         function out = convACDC(obj,input)
             input = abs(input);
             if input>obj.maxReceivingCurrent() || input<obj.convTable(1,1)
-                error('convACDC: input out of limits');
+                error(['convACDC: input out of limits. input = ',...
+                    num2str(input), '; limits: ', num2str(obj.convTable(1,1)),...
+                    ', ', num2str(obj.maxReceivingCurrent())]);
             end
             out = interp1(obj.convTable(:,1),obj.convTable(:,2),input);
         end
@@ -118,7 +120,9 @@ classdef DeviceData
                 error('effectiveChargeCurrent: input must be real');
             end
             if input>obj.chargeTable(end,1) || input<obj.chargeTable(1,1)
-                error('effectiveChargeCurrent: input out of limits');
+                error(['effectiveChargeCurrent: input out of limits. input = ',...
+                    num2str(input), '; limits: ', num2str(obj.chargeTable(1,1)),...
+                    ', ', num2str(obj.chargeTable(end,1))]);
             end
             ic = interp1(obj.chargeTable(:,1),obj.chargeTable(:,2),input);
         end
@@ -129,7 +133,9 @@ classdef DeviceData
         %get the input amplitude for a target output (inverse of convACDC)
         function a = iConvACDC(obj, output)
             if output>obj.convTable(end,2) || output<0 || imag(output)~=0
-                error('iConvACDC: invalid parameter');
+                error(['iConvACDC: invalid parameter output = ',...
+                    num2str(output), '; limit: ', num2str(obj.convTable(end,2))]);
+
             end
             %try to find. Use 'first' if there is more than one occurrence
             i = find(obj.convTable(:,2)==output,1,'first');
@@ -147,7 +153,9 @@ classdef DeviceData
         function input = iEffectiveChargeCurrent(obj, ic)
             if ic>obj.chargeTable(end,2) || ic<obj.chargeTable(1,2) ||...
                 imag(ic)~=0
-                error('iEffectiveChargeCurrent: invalid parameter');
+                error(['iEffectiveChargeCurrent: invalid parameter. ic = ',...
+                    num2str(ic), '; limits: ', num2str(obj.chargeTable(1,2)),...
+                    ', ', num2str(obj.chargeTable(end,2))]);
             end
             %try to find. Use 'first' if there is more than one occurrence
             i = find(obj.chargeTable(:,2)==ic,1,'first');

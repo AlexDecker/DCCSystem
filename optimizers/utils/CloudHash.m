@@ -208,7 +208,7 @@ classdef CloudHash
         end
 
         %choose any charge vector to return
-        function Q = any(obj)
+        function [Q,D] = any(obj)
             
             if obj.countElements()==0
                 error('CloudHash.any: the object is empty')
@@ -218,7 +218,7 @@ classdef CloudHash
 
             %get the next one until reaching a non-empty entry
             while obj.LEN(h)==0
-                h=h+1;
+                h = mod( h, obj.s ) + 1;
             end
 
             j = randi(obj.LEN(h));%get any element from the entry

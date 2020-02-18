@@ -5,6 +5,9 @@
 classdef FFDummie < FeasibleFuture
     properties(Constant)
         tolerance = 1e-6
+        verbose_top = true
+        verbose = false
+        verbose_down = false
     end
     properties
         hashSize
@@ -58,14 +61,21 @@ classdef FFDummie < FeasibleFuture
             consecutive_failures_top = 0;
             successes_top = 0;
             while consecutive_failures_top < obj.thr_top && successes_top < obj.maxSize
+                
                 %get any element
-                Q0 = initialSet.cloud.any();
+                [Q0,D0] = initialSet.cloud.any();
 
                 Rl = FFDummie.calculateLoadResistances(Q0, deviceData, chargeData);
                 
                 %calculating the minimal receiving current to keep alive
                 minIr = FFDummie.calculateMinIr(Q0, deviceData, chargeData,...
                     timeSlot.Id, dt);
+
+                if FFDummie.verbose_top
+                    disp("Q0: "+sprintf("%f | ", Q0));
+                    disp("Rl: "+sprintf("%f | ", Rl));
+                    disp("minIr: "+sprintf("%f | ", minIr));
+                end
 
                 %inverse of the impedance matrix
                 iZ = eye(obj.nt+obj.nr)\(timeSlot.Z+diag([zeros(obj.nt,1);Rl]));
@@ -76,18 +86,24 @@ classdef FFDummie < FeasibleFuture
                 successes = 0;
                 attempts = 0;
                 %generate a set of new states parting from Q
-                while consecutive_failures <i obj.thr && successes_top < obj.maxSize && attempts < obj.ttl
+                while consecutive_failures < obj.thr && successes_top < obj.maxSize && attempts < obj.ttl
                     
                     attempts = attempts + 1;
 
                     %the base voltage
                     v_base = rand(obj.nt,1);
                     %the base current
-                    i_base = iZ*v_base;
-                    
+                    i_base = iZ*[v_base; zeros(obj.nr,1)];
+
                     %range of voltage multipliers which lead to feasible states
                     [minK, maxK] = FFDummie.calculateLimitConstants(v_base,i_base,...
                         minIr, constraints);
+                    
+                    if FFDummie.verbose
+                        disp("...v_base: "+sprintf("%f | ", v_base));
+                        disp("...i_base: "+sprintf("%f | ", i_base));
+                        disp(['...', num2str(minK), '<=k<=', num2str(maxK)]);
+                    end
 
                     if minK>maxK
                         %the range is empty
@@ -101,10 +117,14 @@ classdef FFDummie < FeasibleFuture
 
                             %create a new future state
                             K = rand*(maxK-minK) + minK;
+
                             %K*v_base is valid, so is -K*v_base
                             K = sign(rand-0.5)*K;
                             V = K*v_base;
-                            Q = FFDummie.integrateCharge(Q0,I,Id,deviceData,dt);
+                            I = K*i_base;
+
+                            Q = FFDummie.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt);
+
                             %is it already in the cloud?
                             D = cloud.discretize(Q);
                             [found,~,~,~] = cloud.search(D);
@@ -217,7 +237,7 @@ classdef FFDummie < FeasibleFuture
 
                 %minimal charge current (exclusive)
                 ic = (chargeData.minimum(r)-Q0(r))/dt;
-
+                disp(-Id(r))
                 if ic >= maxIc
                     %impossible to provide
                     minIr(r) = inf;
@@ -237,7 +257,7 @@ classdef FFDummie < FeasibleFuture
                                 minIr(r) = -inf;
                             else
                                 %minimal receiving current amplitude
-                                minIr(r) = deviceData(r).iConvACDC(input+id);
+                                minIr(r) = deviceData(r).iConvACDC(input);
                             end
                         end
                     end
@@ -253,33 +273,33 @@ classdef FFDummie < FeasibleFuture
         function [minK, maxK] = calculateLimitConstants(v_base,i_base,...
             minIr, constraints)
             %i_base: only transmitting currents
-            it_base = i_base(1:obj.nt);
+            it_base = i_base(1:length(v_base));
             %i_base: only receiving currents
-            ir_base = i_base(obj.nt+1:end);
+            ir_base = i_base(length(v_base)+1:end);
             
             %the maximum k which respects the apparent-power constraint
             maxK = sqrt(constraints.maxPapp/abs((it_base')*v_base));
             %the maximum k which respects the active-power constraint
             maxK = min(maxK,sqrt(constraints.maxPact/real((it_base')*v_base)));
 
-            for i=1:obj.nt+obj.nr
+            for i=1:length(i_base)
                 %the maximum k which respects the current constraint for element i
                 maxK = min(maxK,constraints.maxCurr(i)/abs(i_base(i)));
             end
             
-            minK = inf;
-            for r=1:obj.nr
+            minK = -inf;
+            for r=1:length(ir_base)
                 %the minimum k which respects the minIr (exclusive)
-                minK = max(minK, minIr/abs(ir_base(r)));
+                minK = max(minK, minIr(r)/abs(ir_base(r)));
             end
         end
 
         function Q = integrateCharge(Q0, I, Id, deviceData, dt)
             %receiving amplitudes
-            Ir = abs(I(obj.nt+1:end));    
+            Ir = abs(I(end-length(Id)+1:end));    
             
-            Q = zeros(obj.nr,1);
-            for r=1:obj.nr
+            Q = zeros(length(Id),1);
+            for r=1:length(Id)
                 %received current (CC)
                 ir = deviceData(r).convACDC(Ir(r));
                 %charging input current

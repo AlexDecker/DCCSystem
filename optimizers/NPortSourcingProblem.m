@@ -31,13 +31,13 @@ classdef NPortSourcingProblem < NPortPowerProblems
             for t=1:obj.maxTau 
                 %this function creates a set with the states which are reacheable
                 %from the previous one
-                [finalElement, fFuture]=newFeasibleFuture(obj.feasibleFutureModel,...
+                [finalElement, fFuture] = newFeasibleFuture(obj.feasibleFutureModel,...
                     fFutureList(end),obj.timeLine(t), obj.dt, obj.chargeData,...
                     obj.deviceData, obj.constraints);    
 
                 %verify if there is at least one feasible state for the current 
                 %time slot
-                if isEmpty(fFiuture)
+                if isEmpty(fFuture)
                     solveable = false;
                     return;%No, so there is no solution.
                 end
