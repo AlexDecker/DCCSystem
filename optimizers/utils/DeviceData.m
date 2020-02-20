@@ -1,7 +1,9 @@
 %manages load resistance, current conversion and battery charging efficiency
 %for a single device. Unlike Device class from the simulator, it does not store
-%the state, so being the encapsulation of lookup tables.
+%the state. It is only the encapsulation of lookup tables.
 %All following lookup tables must represent monotonically increasing functions.
+%Constant intervals are considered to be monotonically increasing (they are also
+%monotonically decreasing)
 %   *rlTable: Lookup table for load resistance given the SOC
 %   *convTable: Lookup table for DC current given the AC input amplitude,
 %   from 0A to maxCurr
@@ -87,29 +89,62 @@ classdef DeviceData
                 end
             end
         end
-        %conversion functions
+        %DOMAIN FUNCTIONS
+        %the functions below get lower and upper bounds for the domain of each
+        %conversion function
+        function [min_SOC, max_SOC] = domain_getRLfromSOC(obj)
+            min_SOC = obj.rlTable(1, 1);
+            max_SOC = obj.rlTable(end, 1);
+        end
+
+        function [min_current, max_current] = domain_convACDC(obj)
+            min_current = obj.convTable(1, 1);
+            max_current = obj.convTable(end, 1);
+        end
+
+        function [min_current, max_current] = domain_effectiveChargeCurrent(obj)
+            min_current = obj.chargeTable(1, 1);
+            max_current = obj.chargeTable(end, 1);
+        end
+
+        function [min_current, max_current] = domain_iConvACDC(obj)
+            min_current = obj.convTable(1, 2);
+            max_current = obj.convTable(end, 2);
+        end
+
+        function [min_current, max_current] = domain_iEffectiveChargeCurrent(obj)
+            min_current = obj.chargeTable(1, 2);
+            max_current = obj.chargeTable(end, 2);
+        end
+
+        %CONVERSION FUNCTIONS
         %get the corresponding load resistance from the actual charge
         function rl = getRLfromSOC(obj,SOC);
+
             if SOC>1 || SOC<0 || imag(SOC)~=0
                 error('getRLfromSOC: SOC is a real number in [0,1]');
             end
+
             rl = interp1(obj.rlTable(:,1),obj.rlTable(:,2),SOC);
-        end
-        
-        %maximum allowed receiving current for this device
-        function m = maxReceivingCurrent(obj)
-            m = obj.convTable(end,1);
         end
 
         %get the DC current from an AC input
-        function out = convACDC(obj,input)
-            input = abs(input);
-            if input>obj.maxReceivingCurrent() || input<obj.convTable(1,1)
+        function dc_current = convACDC(obj, receiving_current)
+            
+            %AC->DC without losses
+            receiving_current = abs(receiving_current);
+            
+            %for input validation
+            [min_current, max_current] = obj.domain_convACDC;
+
+            if receiving_current > obj.convTable(end,1) || receiving_current < obj.convTable(1,1)
                 error(['convACDC: input out of limits. input = ',...
                     num2str(input), '; limits: ', num2str(obj.convTable(1,1)),...
                     ', ', num2str(obj.maxReceivingCurrent())]);
             end
-            out = interp1(obj.convTable(:,1),obj.convTable(:,2),input);
+
+            %losses
+            dc_current = interp1(obj.convTable(:,1),obj.convTable(:,2),receiving_current);
         end
         %get the current which will effectively be stored or returned by the
         %battery for a given DC input current (out-discharge_current). Input
@@ -127,7 +162,7 @@ classdef DeviceData
             ic = interp1(obj.chargeTable(:,1),obj.chargeTable(:,2),input);
         end
         
-        %inverse conversion functions. Remark: the conversion functions are not
+        %INVERSE CONVERSION FUNCTIONS. Remark: the conversion functions are not
         %always injective, so the inverse functions may not exist.
 
         %get the input amplitude for a target output (inverse of convACDC)

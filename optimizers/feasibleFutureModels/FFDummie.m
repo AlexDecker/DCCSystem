@@ -6,8 +6,8 @@ classdef FFDummie < FeasibleFuture
     properties(Constant)
         tolerance = 1e-6
         verbose_top = true
-        verbose = false
-        verbose_down = false
+        verbose = true
+        verbose_down = true
     end
     properties
         hashSize
@@ -101,7 +101,8 @@ classdef FFDummie < FeasibleFuture
                     
                     if FFDummie.verbose
                         disp("...v_base: "+sprintf("%f | ", v_base));
-                        disp("...i_base: "+sprintf("%f | ", i_base));
+                        disp("...it_base: "+sprintf("%f | ", abs(i_base(1:obj.nt))));
+                        disp("...ir_base: "+sprintf("%f | ", abs(i_base(obj.nt+1:end))));
                         disp(['...', num2str(minK), '<=k<=', num2str(maxK)]);
                     end
 
@@ -124,6 +125,14 @@ classdef FFDummie < FeasibleFuture
                             I = K*i_base;
 
                             Q = FFDummie.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt);
+                            
+                            if FFDummie.verbose_down
+                                disp(['......K: ', num2str(K)]);
+                                disp("......V: "+sprintf("%f | ", V));
+                                disp("......It: "+sprintf("%f | ", abs(I(1:obj.nt))));
+                                disp("......Ir: "+sprintf("%f | ", abs(I(obj.nt+1:end))));
+                                disp("......Q: "+sprintf("%f | ", Q));
+                            end
 
                             %is it already in the cloud?
                             D = cloud.discretize(Q);

@@ -1,7 +1,7 @@
 %general arguments
 nr = 2;
 nt = 2;
-nSlots = 10;
+nSlots = 2;
 dt = 1;
 maxV = 15;
 sampleSize = 100;%the higher this value, the higher the difficulty
