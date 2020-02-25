@@ -1,7 +1,15 @@
 %this function generates the constraints based on provided data in order to
-%guarantee there is at least one solution. It admits homogeneous networks
+%guarantee there is at least one solution. It admits homogeneous networks.
+% * deviceData: DeviceData object, which encapsulates the lookup tables involved 
+%in the simulation process
+% * timeLine: List with the impedance matrix and discharge vector at each moment
+% * dt: Duration of one time slot (s)
+% * sampleSize: This function chooses an efficient voltage vector for each timeslot.
+%the search for the vector is via random sampling. So, the larger this value, the
+%harder the problem instance.
+% * maxV: maximum allowed voltage (absolute value) in volts.
 function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
-	timeLine,dt,sampleSize,maxV,maxIn)
+	timeLine,dt,sampleSize,maxV)
 	
 	success = true;
 	
@@ -9,10 +17,13 @@ function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
 	nSlots = length(timeLine);
 	nr = length(timeLine(1).Id);
 	nt = length(timeLine(1).Z)-nr;
+
+    %maximum receiving current (absolute value)
+    [~,maxIr] = deviceData.domain_convACDC();
 	
-	chargeData.initial = rand(nr,1)*maxIn*dt*nSlots;
+	chargeData.initial = rand(nr,1)*maxIr*dt*nSlots;
 	chargeData.minimum = chargeData.initial - 1e-6; %to guarantee initial>min
-	chargeData.maximum = chargeData.initial+rand(nr,1)*maxIn*dt*nSlots;
+	chargeData.maximum = chargeData.initial + rand(nr,1)*maxIr*dt*nSlots;
 	chargeData.threshold = chargeData.initial;
 	
 	constraints.maxPapp = 0;
@@ -43,7 +54,7 @@ function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
 			%calculating the phasor current vector
 			current = (timeLine(t).Z+diag([zeros(nt,1);Rl]))\[v;zeros(nr,1)];
 			%normalizing
-			k = min((maxIn-1e-6)./abs(current));
+			k = min((maxIr-1e-6)./abs(current));
 			v = k*v;
 			current = k*current;
 			%calculating the active power

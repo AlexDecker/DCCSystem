@@ -1,5 +1,5 @@
 %generate random parameters for DeviceData objects
-function [rlTable,convTable,chargeTable,maxId,maxIn] = randomLookupTables()
+function [rlTable,convTable,chargeTable] = randomLookupTables()
     
     %probability of the next function segment to be constant
     p = 0.2;
@@ -69,8 +69,4 @@ function [rlTable,convTable,chargeTable,maxId,maxIn] = randomLookupTables()
     end
     chargeTable = [chargeTableNeg; chargeTablePos(2:end,:)];
 
-    %the maximum discharge current supported by the device
-    maxId = -chargeTable(1,1);
-    %the maximum input current amplitude supported by the device
-    maxIn = convTable(end,1);
 end

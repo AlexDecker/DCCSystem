@@ -92,6 +92,9 @@ classdef NPortPowerProblems
             if n1==0 || n2~=1
                 error('Invalid format for timeLine');
             end
+            
+            %max discharge current for each device along the timeline
+            maxId = zeros(obj.nr,1);
             for t = 1:length(obj.timeLine)
                 [n1,n2] = size(obj.timeLine(t).Z);
                 if obj.n~=n1 || obj.n~=n2
@@ -120,6 +123,7 @@ classdef NPortPowerProblems
                     error(['The discharge currents must be real positive. t=',...
 						num2str(t)]);
                 end
+                maxId = max(maxId, obj.timeLine(t).Id);
             end
             
             [n1,n2] = size(obj.dt);
@@ -186,6 +190,15 @@ classdef NPortPowerProblems
             for i=1:obj.nr
                 if ~obj.deviceData(i).check()
                     error(['Invalid deviceData at index ',num2str(i)]);
+                end
+                [~,max_input_current] = obj.deviceData(i).domain_convACDC();
+                [min_charge_current,~] = obj.deviceData(i).domain_effectiveChargeCurrent();
+                if max_input_current < obj.constraints.maxCurr(obj.nt + i)
+                    error(['The informed maxCurr for device ', num2str(i), ' is out of domain.']);
+                end
+                if min_charge_current > -maxId(i)
+                    error(['The maximum requested discharge current for device ',...
+                        num2str(i), ' is out of domain.']);
                 end
             end
         end

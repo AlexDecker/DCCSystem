@@ -10,7 +10,7 @@ for i=1:1000
     d = rand;%dynamicity
     
     ffModel = FeasibleFuture();    
-    [P, sol] = randomInstance(nt,nr,nSlots,dt,maxV,sampleSize,s,d,ffModel);
+    [P, sol] = randomSourcingInstance(nt,nr,nSlots,dt,maxV,sampleSize,s,d,ffModel);
     [result, ~] = P.verify(sol);
 
     if mod(i,10)==0

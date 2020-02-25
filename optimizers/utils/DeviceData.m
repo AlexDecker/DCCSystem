@@ -120,9 +120,10 @@ classdef DeviceData
         %CONVERSION FUNCTIONS
         %get the corresponding load resistance from the actual charge
         function rl = getRLfromSOC(obj,SOC);
-
-            if SOC>1 || SOC<0 || imag(SOC)~=0
-                error('getRLfromSOC: SOC is a real number in [0,1]');
+            [min_SOC, max_SOC] = obj.domain_getRLfromSOC();
+            if SOC > max_SOC || SOC < min_SOC || imag(SOC) ~= 0
+                error(['getRLfromSOC: SOC is a real number in [',...
+                    num2str(min_SOC),',',num2str(max_SOC),'1]']);
             end
 
             rl = interp1(obj.rlTable(:,1),obj.rlTable(:,2),SOC);
@@ -135,12 +136,12 @@ classdef DeviceData
             receiving_current = abs(receiving_current);
             
             %for input validation
-            [min_current, max_current] = obj.domain_convACDC;
+            [min_current, max_current] = obj.domain_convACDC();
 
-            if receiving_current > obj.convTable(end,1) || receiving_current < obj.convTable(1,1)
+            if receiving_current > max_current || receiving_current < min_current
                 error(['convACDC: input out of limits. input = ',...
-                    num2str(input), '; limits: ', num2str(obj.convTable(1,1)),...
-                    ', ', num2str(obj.maxReceivingCurrent())]);
+                    num2str(input), '; limits: ', num2str(min_current),...
+                    ', ', num2str(max_current)]);
             end
 
             %losses
@@ -151,13 +152,18 @@ classdef DeviceData
         %is required to be more than the discharge current and less than the
         %maximum converted output current
         function ic = effectiveChargeCurrent(obj,input)
+            
+            %input current must be DC
             if imag(input)~=0
                 error('effectiveChargeCurrent: input must be real');
             end
-            if input>obj.chargeTable(end,1) || input<obj.chargeTable(1,1)
+            
+            %for input validation
+            [min_current, max_current] = obj.domain_effectiveChargeCurrent();
+            if input > max_current || input < min_current
                 error(['effectiveChargeCurrent: input out of limits. input = ',...
-                    num2str(input), '; limits: ', num2str(obj.chargeTable(1,1)),...
-                    ', ', num2str(obj.chargeTable(end,1))]);
+                    num2str(input), '; limits: ', num2str(min_current),...
+                    ', ', num2str(max_current)]);
             end
             ic = interp1(obj.chargeTable(:,1),obj.chargeTable(:,2),input);
         end
@@ -167,13 +173,20 @@ classdef DeviceData
 
         %get the input amplitude for a target output (inverse of convACDC)
         function a = iConvACDC(obj, output)
-            if output>obj.convTable(end,2) || output<0 || imag(output)~=0
+            
+            %for input validation
+            [min_current, max_current] = obj.domain_iConvACDC();
+
+            if output > max_current || output < min_current || imag(output)~=0
                 error(['iConvACDC: invalid parameter output = ',...
-                    num2str(output), '; limit: ', num2str(obj.convTable(end,2))]);
+                    num2str(output), '; limits: ', num2str(min_current), ', ',...
+                    num2str(max_current)]);
 
             end
+
             %try to find. Use 'first' if there is more than one occurrence
             i = find(obj.convTable(:,2)==output,1,'first');
+
             if isempty(i) %did not find, then interpolate
                 i0 = find(obj.convTable(:,2)<output,1,'last');
                 %i0 cannot be empty, since output is non-negative
@@ -186,11 +199,13 @@ classdef DeviceData
 
         %inverse function of effectiveChargeCurrent
         function input = iEffectiveChargeCurrent(obj, ic)
-            if ic>obj.chargeTable(end,2) || ic<obj.chargeTable(1,2) ||...
-                imag(ic)~=0
+            
+            %for input validation
+            [min_current, max_current] = obj.domain_iEffectiveChargeCurrent();
+            if ic > max_current || ic < min_current || imag(ic) ~= 0
                 error(['iEffectiveChargeCurrent: invalid parameter. ic = ',...
-                    num2str(ic), '; limits: ', num2str(obj.chargeTable(1,2)),...
-                    ', ', num2str(obj.chargeTable(end,2))]);
+                    num2str(ic), '; limits: ', num2str(min_current),...
+                    ', ', num2str(max_current)]);
             end
             %try to find. Use 'first' if there is more than one occurrence
             i = find(obj.chargeTable(:,2)==ic,1,'first');
