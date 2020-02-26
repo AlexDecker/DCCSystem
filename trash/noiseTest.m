@@ -92,7 +92,18 @@ B = eye(nr)/((M/ZT)*M.'-ZR-RL);
 H = ((M/ZT)*M.'-ZR-RL)\(M/ZT);
 
 DIR = B*dRL*ir+(H+B*dRL*H)*dv;
+disp('Desired dIr:');disp(dir')
+disp('Achieved dIr:');disp(DIR')
 disp(['Error for equation 4: ', num2str(100*mean(abs(DIR-dir)./abs(dir))),'%']);
+
+%generating the value of dv in order to achieve the desired dir
+dv = (H+B*dRL*H)\(dir - B*dRL*ir);
+
+I = (slot.Z+[zeros(nt),zeros(nt,nr);zeros(nr,nt),RL+dRL])\[v+dv;zeros(nr,1)];
+DIR = I(nt+1:end)-ir;
+disp('Desired dIr:');disp(dir')
+disp('Achieved dIr:');disp(DIR')
+disp(['Error for equation 4.5: ', num2str(100*mean(abs(DIR-dir)./abs(dir))),'%']);
 
 %generating the value of dv for q0+dq->q ---------------------------------------
 
