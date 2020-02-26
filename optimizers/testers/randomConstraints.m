@@ -53,8 +53,9 @@ function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
 			v = maxV*rand(nt,1);
 			%calculating the phasor current vector
 			current = (timeLine(t).Z+diag([zeros(nt,1);Rl]))\[v;zeros(nr,1)];
+			receiving_current = current(nt+1:end);
 			%normalizing
-			k = min((maxIr-1e-6)./abs(current));
+			k = min((maxIr-1e-6)./abs(receiving_current));
 			v = k*v;
 			current = k*current;
 			%calculating the active power
@@ -67,6 +68,7 @@ function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
 		end
 		sol = [sol, V];
 		I = (timeLine(t).Z+diag([zeros(nt,1);Rl]))\[V;zeros(nr,1)];
+		
 		%updating constraints
 		constraints.maxCurr = max(constraints.maxCurr, abs(I));
 		constraints.maxPapp = max(constraints.maxPapp, abs(I(1:nt)'*V));
@@ -101,4 +103,6 @@ function [constraints,chargeData,sol,success] = randomConstraints(deviceData,...
     constraints.maxPapp = (1.1)*constraints.maxPapp;
     constraints.maxPact = (1.1)*constraints.maxPact;
     constraints.maxCurr = (1.1)*constraints.maxCurr;
+	%maxCurr in RX is limited by maxIr
+	constraints.maxCurr = min(constraints.maxCurr, [inf*ones(nt,1);maxIr*ones(nr,1)]);
 end
