@@ -238,7 +238,7 @@ classdef FFDummie < FeasibleFuture
             for r=1:length(Q0)
                 
                 %maximum input current the system is able to provide
-                maxIn = deviceData(r).convACDC(deviceData(r).maxReceivingCurrent());
+                [minIn, maxIn] = deviceData(r).domain_iConvACDC();
 
                 %maximum charging current the system is able to provide
                 %(considering Id as the discharge current)
@@ -246,7 +246,7 @@ classdef FFDummie < FeasibleFuture
 
                 %minimal charge current (exclusive)
                 ic = (chargeData.minimum(r)-Q0(r))/dt;
-                disp(-Id(r))
+                
                 if ic >= maxIc
                     %impossible to provide
                     minIr(r) = inf;
@@ -261,7 +261,7 @@ classdef FFDummie < FeasibleFuture
                             %impossible to provide
                             minIr(r) = inf;
                         else
-                            if input < 0
+                            if input < minIn
                                 %trivial, since the output of the conversion is non-negative
                                 minIr(r) = -inf;
                             else
