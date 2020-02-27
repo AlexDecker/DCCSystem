@@ -90,8 +90,8 @@ classdef FFDummie < FeasibleFuture
                     
                     attempts = attempts + 1;
 
-                    %the base voltage
-                    v_base = rand(obj.nt,1);
+                    %the base voltage (some positive, some negative)
+                    v_base = rand(obj.nt,1)-0.5;
                     %the base current
                     i_base = iZ*[v_base; zeros(obj.nr,1)];
 
@@ -119,8 +119,8 @@ classdef FFDummie < FeasibleFuture
                             %create a new future state
                             K = rand*(maxK-minK) + minK;
 
-                            %K*v_base is valid, so is -K*v_base
-                            K = sign(rand-0.5)*K;
+                            %-K is not required to be tested, since it leads to the same abs(ir)
+
                             V = K*v_base;
                             I = K*i_base;
 
@@ -211,7 +211,7 @@ classdef FFDummie < FeasibleFuture
                 else
                     [~,D0,V] = obj.cloud.read(h,j);
                 end
-                d = struct('voltage',V,'previous',D0)
+                d = struct('voltage',V,'previous',D0);
             else
                 d = [];
             end
