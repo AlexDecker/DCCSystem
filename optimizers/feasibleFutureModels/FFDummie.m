@@ -7,7 +7,7 @@ classdef FFDummie < FeasibleFuture
         tolerance = 1e-6
         verbose_top = true
         verbose = true
-        verbose_down = true
+        verbose_down = false
     end
     properties
         hashSize
@@ -16,6 +16,7 @@ classdef FFDummie < FeasibleFuture
         thr_top
         thr
         thr_down
+        ttl_top
         ttl
         ttl_down
         nt
@@ -23,18 +24,22 @@ classdef FFDummie < FeasibleFuture
         cloud
     end
     methods
-        function obj = FFDummie(hashSize,nSegments,maxSize,thr_top,thr,thr_down,ttl,ttl_down,nt,nr)
+        function obj = FFDummie(hashSize, nSegments, maxSize, thr_top, thr, thr_down, ttl_top,...
+            ttl, ttl_down, nt, nr)
+
             obj.hashSize = hashSize;
             obj.nSegments = nSegments;
             obj.maxSize = maxSize;
             obj.thr_top = thr_top;
             obj.thr = thr;
             obj.thr_down = thr_down;
+            obj.ttl_top = ttl_top;
             obj.ttl = ttl;
             obj.ttl_down = ttl_down;
             obj.nt = nt;
 			obj.nr = nr;
             obj.cloud = [];
+
         end
         
         function [final, new] = newFeasibleFuture(obj, initialSet, timeSlot, dt,...
@@ -60,7 +65,11 @@ classdef FFDummie < FeasibleFuture
             %failure: no vector was inserted 
             consecutive_failures_top = 0;
             successes_top = 0;
-            while consecutive_failures_top < obj.thr_top && successes_top < obj.maxSize
+            attempts_top = 0;
+            while consecutive_failures_top < obj.thr_top && successes_top < obj.maxSize && ...
+                attempts_top < obj.ttl_top
+
+                attempts_top = attempts_top + 1;
                 
                 %get any element
                 [Q0,D0] = initialSet.cloud.any();
@@ -115,6 +124,8 @@ classdef FFDummie < FeasibleFuture
                         attempts_down = 0;
                         while consecutive_failures_down < obj.thr_down &&...
                             successes_top < obj.maxSize && attempts_down < obj.ttl_down
+
+                            attempts_down = attempts_down+1;
 
                             %create a new future state
                             K = rand*(maxK-minK) + minK;
@@ -176,7 +187,7 @@ classdef FFDummie < FeasibleFuture
 
             %build the object
             new = FFDummie(obj.hashSize, obj.nSegments, obj.maxSize, obj.thr_top, obj.thr,...
-                obj.thr_down, obj.ttl, obj.ttl_down, obj.nt, obj.nr);
+                obj.thr_down, obj.ttl_top, obj.ttl, obj.ttl_down, obj.nt, obj.nr);
 
             %insert the cloud into the object
             new.cloud = cloud;
@@ -193,7 +204,7 @@ classdef FFDummie < FeasibleFuture
 
             %build the object
             initial = FFDummie(1, obj.nSegments, 1, obj.thr_top, obj.thr, obj.thr_down,...
-                obj.ttl, obj.ttl_down, obj.nt, obj.nr);
+                obj.ttl_top, obj.ttl, obj.ttl_down, obj.nt, obj.nr);
 
             %insert the cloud into the object
             initial.cloud = cloud;

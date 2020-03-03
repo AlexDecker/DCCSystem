@@ -1,7 +1,7 @@
 %general arguments
-nr = 2;
-nt = 2;
-nSlots = 2;
+nr = 1;
+nt = 1;
+nSlots = 1;
 dt = 1;
 maxV = 15;
 sampleSize = 10;%the higher this value, the higher the difficulty
@@ -13,6 +13,7 @@ maxSize = 10000;
 thr_top = 10;
 thr = 10;
 thr_down = 10;
+ttl_top = 100;
 ttl = 100;
 ttl_down = 100;
 
@@ -23,10 +24,11 @@ for i=1:n_instances
     s = rand;%sparsity
     d = rand;%dynamicity
     
-    ffModel = FFDummie(hashSize, nSegments, maxSize, thr_top, thr, thr_down, ttl, ttl_down, nt, nr);
+    ffModel = FFDummie(hashSize, nSegments, maxSize, thr_top, thr, thr_down, ttl_top,...
+        ttl, ttl_down, nt, nr);
 
     [P, reference_solution] = randomSourcingInstance(nt,nr,nSlots,dt,maxV,sampleSize,s,d,ffModel);
-    [result, QLOG_ref] = P.verify(reference_solution);
+    [result, ~] = P.verify(reference_solution);
     if result~=0
         error(['RandomInstance: error number ',num2str(result)]);
     end
@@ -36,7 +38,7 @@ for i=1:n_instances
     if solveable
         found_solutions = found_solutions + 1;
         
-        [result, Q_LOG] = P.verify(solution);
+        result = P.plot(solution,false);
 
         if result~=0
             error(['SolveCharging: error number ',num2str(result)]);

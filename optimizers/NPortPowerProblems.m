@@ -28,6 +28,9 @@ classdef NPortPowerProblems
         nr %number of receiving devices
         maxTau %number of time slots
     end
+    properties(Constant)
+        plot_colors = 'rgbkmcy'
+    end
     methods
         %timeLine: data for each time slot. Vector of structs with the following 
 		%	fields:
@@ -282,6 +285,51 @@ classdef NPortPowerProblems
                 result = 2;%could not complete all charges
             else
                 result = 0;%valid solution
+            end
+        end
+
+        %Plot the chart progression for each device
+        %individual is true if the charts are meant to be separated for
+        %each device
+        function result = plot(obj, solution, individual)
+            [result, QLog] = obj.verify(solution);
+
+            figure; hold on;
+            
+            curves = [];
+            labels = {};
+            for r = 1:obj.nr
+                %the charge curve for this device
+                p = plot(QLog(r,:),obj.plot_colors(mod(r,length(obj.plot_colors))));
+
+                if individual
+                    curves(end+1) = p;
+                    labels{end+1} = ['Device ', num2str(r)];
+                end
+                
+                %the minimum charge (Dashed line)
+                yline(obj.chargeData.minimum(r),...
+                    ['--', obj.plot_colors(mod(r,length(obj.plot_colors)))]);
+
+                %the maximum charge (Dash-dot line)
+                yline(obj.chargeData.maximum(r),...
+                    ['-.', obj.plot_colors(mod(r,length(obj.plot_colors)))]);
+
+                %the minimum charge (dotted line)
+                yline(obj.chargeData.threshold(r),...
+                    [':', obj.plot_colors(mod(r,length(obj.plot_colors)))]);
+
+                if ~individual
+                    title(['Device ', num2str(r)]);
+                    legend('charge','minumum','maximum','threshold');
+                    %create a new figure for the next device
+                    if r~=obj.nr
+                        figure;hold on;
+                    end
+                end
+            end
+            if individual
+                legend(curves, labels);
             end
         end
 
