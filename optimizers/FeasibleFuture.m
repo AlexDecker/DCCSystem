@@ -18,9 +18,11 @@ classdef FeasibleFuture
         %maxPact constraints. See NPortPowerProblems class. If there is an element
         %in 'new' whose charge vector is more then the threshold, it must be returned
         %as 'final'. If there is more than one element, the function must choose one
-        %of them according to user's will.
+        %of them according to user's will. The stop_if_threshold_reached boolean
+        %argument controls if the search for new feasible future charge vectors must
+        %be kept even if a final vector was found.
         function [final,new] = newFeasibleFuture(obj, initialSet, timeSlot, dt,...
-            chargeData, deviceData, constraints)
+            chargeData, deviceData, constraints, stop_if_threshold_reached)
             new = [];
             final = [];
         end

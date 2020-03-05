@@ -37,10 +37,11 @@ classdef NPortChargingProblem < NPortPowerProblems
             fFutureList = initialSet;
 
             for t=1:obj.maxTau 
-                %this function creates a set with the states which are reacheable 
+                %this function creates a set with the states which are reacheable.
+                %stop_if_threshold_reached is set true.
                 [finalElement, fFuture]=newFeasibleFuture(obj.feasibleFutureModel,...
                     fFutureList(end),obj.timeLine(t), obj.dt, obj.chargeData,...
-                    obj.deviceData, obj.constraints);
+                    obj.deviceData, obj.constraints, true);
 
                 if ~isempty(finalElement)
                     %solution found. building the voltage progression

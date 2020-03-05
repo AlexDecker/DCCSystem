@@ -8,7 +8,7 @@ sampleSize = 10;%the higher this value, the higher the difficulty
 
 %arguments for the FFDummie
 hashSize = 1000;
-nSegments = 100;
+nSegments = 256;
 maxSize = 10000;
 thr_top = 10;
 thr = 10;
@@ -18,7 +18,7 @@ ttl = 100;
 ttl_down = 100;
 
 found_solutions = 0;
-n_instances = 100;
+n_instances = 1000;
 
 for i=1:n_instances
     s = rand;%sparsity
@@ -38,9 +38,11 @@ for i=1:n_instances
     if solveable
         found_solutions = found_solutions + 1;
         
-        result = P.plot(solution,false);
+        %result = P.plot(solution,false);
+        [result, ~] = P.verify(solution);
 
         if result~=0
+            P.plot(solution,false);
             error(['SolveCharging: error number ',num2str(result)]);
         end
 

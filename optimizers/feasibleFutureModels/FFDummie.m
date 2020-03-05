@@ -7,7 +7,7 @@ classdef FFDummie < FeasibleFuture
         tolerance = 1e-6
         verbose_top = true
         verbose = true
-        verbose_down = false
+        verbose_down = true
     end
     properties
         hashSize
@@ -43,7 +43,7 @@ classdef FFDummie < FeasibleFuture
         end
         
         function [final, new] = newFeasibleFuture(obj, initialSet, timeSlot, dt,...
-            chargeData, deviceData, constraints)
+            chargeData, deviceData, constraints, stop_if_threshold_reached)
             
             final = [];
 
@@ -66,8 +66,9 @@ classdef FFDummie < FeasibleFuture
             consecutive_failures_top = 0;
             successes_top = 0;
             attempts_top = 0;
+            threshold_reached = false;
             while consecutive_failures_top < obj.thr_top && successes_top < obj.maxSize && ...
-                attempts_top < obj.ttl_top
+                attempts_top < obj.ttl_top && ~threshold_reached
 
                 attempts_top = attempts_top + 1;
                 
@@ -87,7 +88,7 @@ classdef FFDummie < FeasibleFuture
                 end
 
                 %inverse of the impedance matrix
-                iZ = eye(obj.nt+obj.nr)\(timeSlot.Z+diag([zeros(obj.nt,1);Rl]));
+                iZ = eye(obj.nt+obj.nr)/(timeSlot.Z+diag([zeros(obj.nt,1);Rl]));
                 
                 %number of failures: number of times when no vector was inserted due
                 %it has already been inserted or minK>maxK
@@ -95,7 +96,8 @@ classdef FFDummie < FeasibleFuture
                 successes = 0;
                 attempts = 0;
                 %generate a set of new states parting from Q
-                while consecutive_failures < obj.thr && successes_top < obj.maxSize && attempts < obj.ttl
+                while consecutive_failures < obj.thr && successes_top < obj.maxSize &&...
+                    attempts < obj.ttl && ~threshold_reached
                     
                     attempts = attempts + 1;
 
@@ -115,20 +117,22 @@ classdef FFDummie < FeasibleFuture
                         disp(['...', num2str(minK), '<=k<=', num2str(maxK)]);
                     end
 
-                    if minK>maxK
+                    if minK + FFDummie.tolerance > maxK - FFDummie.tolerance
                         %the range is empty
                         consecutive_failures = consecutive_failures+1;
                     else
                         successes_down = 0;
                         consecutive_failures_down = 0;
                         attempts_down = 0;
+
+                        %create a new future state
+                        K = max(maxK - FFDummie.tolerance, minK + FFDummie.tolerance);
+
                         while consecutive_failures_down < obj.thr_down &&...
-                            successes_top < obj.maxSize && attempts_down < obj.ttl_down
+                            successes_top < obj.maxSize && attempts_down < obj.ttl_down &&...
+                           ~threshold_reached
 
                             attempts_down = attempts_down+1;
-
-                            %create a new future state
-                            K = rand*(maxK-minK) + minK;
 
                             %-K is not required to be tested, since it leads to the same abs(ir)
 
@@ -160,8 +164,14 @@ classdef FFDummie < FeasibleFuture
                                 %is this element a valid final state?
                                 if mean(Q>=chargeData.threshold)==1
                                     final = struct('voltage',V,'previous',D0);
+                                    if stop_if_threshold_reached
+                                        threshold_reached = true;
+                                    end
                                 end
                             end
+
+                            %create a new future state
+                            K = rand*(maxK-minK) + minK;
                         end
                         
                         if successes_down > 0
