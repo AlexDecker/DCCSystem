@@ -12,7 +12,7 @@
 %   converted current)
 
 classdef DeviceData
-    properties(Access=public)
+    properties(GetAccess=public, SetAccess=private)
 		rlTable
 		convTable
         chargeTable
@@ -216,6 +216,55 @@ classdef DeviceData
                 input = interp1(obj.chargeTable(i0:i0+1,2),obj.chargeTable(i0:i0+1,1), ic);
             else
                 input = obj.chargeTable(i,1);%there is an entry with the desired output
+            end
+        end
+
+        %MINIMAL DOMAIN VARIATION FOR A GIVEN IMAGE VARIATION
+
+        %given an receiving current sub-domain [receiving_current_min, receiving_current_max],
+        %what is the maximal variation for which the consequent rectified current variation is
+        %less than or equal to d_dc_current_max?
+        function d_receiving_current = max_variation_convACDC(obj,receiving_current_min,...
+            receiving_current_max, d_dc_current_max)
+            
+            if receiving_current_min > receiving_current_max
+                error('max_variation_convACDC: informed sub-domain is invalid');
+            end
+
+            if d_dc_current_max <= 0
+                error('max_variation_convACDC: informed maximal variation is invalid');
+            end
+
+            %the domain
+            [min_current, max_current] = obj.domain_convACDC();
+            
+            %verifing the limits
+            if receiving_current_min < min_current || receiving_current_max > max_current
+                error('max_variation_convACDC: informed sub-domain is out of limits.');
+            end
+
+            %the minimal interval of the lookup table which includes the sub-domain
+            i0 = find(obj.convTable(:,1) <= receiving_current_min, 1, 'last')
+            i1 = find(obj.convTable(:,1) >= receiving_current_max, 1, 'first')
+            
+            %the domain of the inverse function
+            [~, max_output] = obj.domain_iConvACDC();
+            
+            %get the minimal maximal variation
+            d_receiving_current = inf;
+
+            %for all points within the [i0,i1] interval
+            for i = i0:(i1-1)
+                x = obj.convTable(i,1);
+                %the actual image
+                y = obj.convTable(i,2);
+                %the variated image
+                y1 = y + d_dc_current_max;
+                if y1 <= max_output %is this output feasible?
+                    %minimal receiving_current which generates y1
+                    x1 = obj.iConvACDC(y1)
+                    d_receiving_current = min(d_receiving_current, x1-x)
+                end
             end
         end
     end
