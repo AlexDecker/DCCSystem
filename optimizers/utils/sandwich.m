@@ -29,12 +29,12 @@ function [a1,b1,a2,b2] = sandwich(x,y)
 		  zeros(length(x_neg),2), -x_neg, -ones(length(x_neg),1)];
 	
 	%the coefficients for v = [z1; z2; s1; s2; a]; 
-	A = [A1, -A, [eye(length(x)), zeros(length(x)), zeros(length(x));
+	A = [A1, -A1, [eye(length(x)), zeros(length(x)), zeros(length(x));
 				  zeros(length(x)), -eye(length(x)), eye(length(x))]];
 	
 	b = [-y_neg; y_pos; y_pos; -y_neg];
 	
-	c = [c1, -c1, zeros(2*length(x)), 100*max(c1)*ones(length(x))];
+	c = [c1; -c1; zeros(2*length(x),1); 100*max(c1)*ones(length(x),1)].';
 	
 	%v vecotor has all variables. there are
 	z1.n = 4; %four variables in z1 (one for each original variable)
@@ -55,33 +55,25 @@ function [a1,b1,a2,b2] = sandwich(x,y)
 	%the basic and non-basic variables sets: initially, the slack and
 	%artificial variables are the basic ones.
 	vb = [s1.begin:s1.end, a.begin:a.end];
-	vn = [z1.begin:z1.end, z2.begin:z2.end; s2.begin:s2.end];
+	vn = [z1.begin:z1.end, z2.begin:z2.end, s2.begin:s2.end];
 		
 	while true %for the penalty method (regarding artificial variables)
 		%simplex main loop
 		while true
-			%the coefficient matrix for the basic variables
-			B = A(:,vb);
-			%the coefficient matrix for the non-basic variables
-			N = A(:,vb);
-			%the cost vector for the basic variables
-			cb = c(vb);
-			%the cost vector for the non-basic variables
-			cn = c(vn);
 			
-			%inverse of B
-			iB = eye(length(B)) / B;
+			%inverse of the coefficient matrix related to basic variables
+			iB = eye(length(vb)) / A(:,vb);
 			
-			%useful variables
-			cb_iB = cb * iB;
+			%useful constants
+			cb_iB = c(vb) * iB;
 			iB_b = iB * b; %the values of the basic variables
 			
 			%choosing the entering variable
 			enters = -1; %invalid, initially
 			max_gap = 0;
 			for vn_ = vn
-				z = cv_iB * N(:, vn_);
-				gap = z - cn(vn_);
+				z = cb_iB * A(:, vn_);
+				gap = z - c(vn_);
 				if gap > max_gap
 					enters = vn_;
 					max_gap = gap;
@@ -97,13 +89,13 @@ function [a1,b1,a2,b2] = sandwich(x,y)
 			end
 			
 			%one more useful variable
-			iB_N_enters = iB * N(:, enters);
+			iB_A_enters = iB * A(:, enters);
 			
 			%now, who leaves the basic set?
 			leaves = -1; %invalid, initially
 			min_ratio = inf;
 			for vb_ = vb
-				denominator = iB_N_enters(vb_);
+				denominator = iB_A_enters(vb_);
 				if denominator > 0
 					numerator = iB_b(vb_);
 					ratio = numerator / denominator;
