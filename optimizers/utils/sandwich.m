@@ -2,7 +2,8 @@
 %This function generates two linear function (y = a1*x+b1 and y = a2*x+b2)
 %The first function is a ceil for a given function defined by a lookup table
 %and the secon is a floor for the fist given function. We admit x is sorted,
-%do not have repetitions and have sufficient number of samples.
+%do not have repetitions, have sufficient number of samples and is a column
+%matrix. y must also be a column-matrix.
 %-x: the vector with the abciss values
 %-y: the vector with the 
 function [a1,b1,a2,b2] = sandwich(x,y)
@@ -56,18 +57,21 @@ function [a1,b1,a2,b2] = sandwich(x,y)
 	%artificial variables are the basic ones.
 	vb = [s1.begin:s1.end, a.begin:a.end];
 	vn = [z1.begin:z1.end, z2.begin:z2.end, s2.begin:s2.end];
-		
+	    
 	while true %for the penalty method (regarding artificial variables)
 		%simplex main loop
 		while true
-			
+
 			%inverse of the coefficient matrix related to basic variables
 			iB = eye(length(vb)) / A(:,vb);
-			
+            
 			%useful constants
 			cb_iB = c(vb) * iB;
 			iB_b = iB * b; %the values of the basic variables
-			
+
+			%the minimized value so far
+            minimized_value = c(vb)*iB_b;
+
 			%choosing the entering variable
 			enters = -1; %invalid, initially
 			max_gap = 0;
@@ -75,8 +79,42 @@ function [a1,b1,a2,b2] = sandwich(x,y)
 				z = cb_iB * A(:, vn_);
 				gap = z - c(vn_);
 				if gap > max_gap
-					enters = vn_;
-					max_gap = gap;
+                    %For this problem, some variables have a 'sibling', that is,
+                    %a variable whose corresponding column in A is the oposite of
+                    %the other variable. z1(i) and z2(i) are siblings, as are
+                    %s2(i) and a(i). Only one sibling can be in the base, because
+                    %otherwise B will have repeated columns and will be singular.
+
+                    %find the sibling of vn_ (-1 if it has not one)
+                    if max(vn_==z1.begin:z1.end)~=0 %vn_ belongs to z1
+                        sibling = vn_ + z1.n;
+                    elseif max(vn_==z2.begin:z2.end)~=0 %vn_ belongs to z2
+                        sibling = vn_ - z1.n;
+                    elseif max(vn_==s2.begin:s2.end)~=0 %vn_ belongs to s2
+                        sibling = vn_ + s2.n;
+                    elseif max(vn_==a.begin:a.end)~=0 %vn_ belongs to a
+                        sibling = vn_ - s2.n;
+                    else
+                        sibling = 0; %no sibling
+                    end
+                    
+                    if max(sibling==vb)~=0 %is the sibling in the base?
+                        %if vn_ enters, the sibling must leave.
+                        new_vb = [vb(vb~=sibling), vn_];
+                        new_minimized_value = c(new_vb)*(A(:,new_vb)\b);
+                        if new_minimized_value < minimized_value
+                            %the change is good
+                            enters = vn_;
+                            max_gap = gap;
+                            is_sibling = true;
+                            leaving_sibling = sibling;
+                        end
+                    else
+                        enters = vn_;
+                        max_gap = gap;
+                        is_sibling = false;
+                    end 
+					
 				end	
 			end
 			
@@ -92,28 +130,34 @@ function [a1,b1,a2,b2] = sandwich(x,y)
 			iB_A_enters = iB * A(:, enters);
 			
 			%now, who leaves the basic set?
-			leaves = -1; %invalid, initially
-			min_ratio = inf;
-			for vb_ = vb
-				denominator = iB_A_enters(vb_);
-				if denominator > 0
-					numerator = iB_b(vb_);
-					ratio = numerator / denominator;
-					if ratio < min_ratio
-						leaves = vb_;
-						min_ratio = ratio;
-					end
-				end
-			end
+            if is_sibling
+                leaves = leaving_sibling;
+            else
+			    leaves = -1; %invalid, initially
+			    min_ratio = inf;
+			    for i = 1:length(vb)
+				    denominator = iB_A_enters(i);
+                
+				    if denominator > 0
+					    numerator = iB_b(i);
+					    ratio = numerator / denominator;
+					    if ratio < min_ratio
+						    leaves = vb(i);
+					    	min_ratio = ratio;
+					    end
+				    end
+			    end
+            end
+
 			
 			%stop condition. unbounded. something got really wrong
-			if enters==-1
+			if leaves==-1
 				error('This linear program should not be unbounded!!');
 			end
 			
 			%switch the variables
-			vb = [vb(vb~=leaving), entering];
-			vn = [vn(vn~=entering), leaving];
+			vb = [vb(vb~=leaves), enters];
+			vn = [vn(vn~=enters), leaves];
 		end
 		
 		%the artificial variables must always be zero
