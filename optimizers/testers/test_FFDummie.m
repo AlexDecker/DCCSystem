@@ -16,16 +16,17 @@ thr_down = 10;
 ttl_top = 100;
 ttl = 100;
 ttl_down = 100;
+ttl_fineAdjustment = 10;
 
 found_solutions = 0;
-n_instances = 1000;
+n_instances = 1;
 
 for i=1:n_instances
     s = rand;%sparsity
     d = rand;%dynamicity
     
     ffModel = FFDummie(hashSize, nSegments, maxSize, thr_top, thr, thr_down, ttl_top,...
-        ttl, ttl_down, nt, nr);
+        ttl, ttl_down, ttl_fineAdjustment, nt, nr);
 
     [P, reference_solution] = randomSourcingInstance(nt,nr,nSlots,dt,maxV,sampleSize,s,d,ffModel);
     [result, ~] = P.verify(reference_solution);
@@ -42,7 +43,7 @@ for i=1:n_instances
         [result, ~] = P.verify(solution);
 
         if result~=0
-            P.plot(solution,false);
+            %P.plot(solution,false);
             error(['SolveCharging: error number ',num2str(result)]);
         end
 

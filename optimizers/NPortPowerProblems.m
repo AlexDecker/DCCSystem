@@ -229,7 +229,7 @@ classdef NPortPowerProblems
 
             if time==0
                 %it is only possible if the devices start charged
-                if mean(obj.chargeData.initial>obj.chargeData.threshold)==1
+                if mean(obj.chargeData.initial>=obj.chargeData.threshold)==1
                     result = 0;%ok, valid
                 else
                     result = 2;%unreached
@@ -332,7 +332,80 @@ classdef NPortPowerProblems
                 legend(curves, labels);
             end
         end
-
+		
+		%The FeasibleFuture represented as a hyper-dot cloud may lead to precision lacks due to compression of the
+		%intermediate states. Indeed, as the FeasibleFuture space is often too large, storing every value with 
+		%great precision would lead to excessive memory usage. Therefore, this function was designed for improving the
+		%precision of a solution.
+		% - solution: vector of structures with the following fields
+		%	- previous charge vector
+		%	- approximated voltage vector
+		%	- charge vector
+		function new_solution = recover_voltage_progression(obj, solution, max_iterations)
+		
+			new_solution = [];
+			
+			for i=1:length(solution)
+			
+				slot.Q0 = solution(i).Q0;
+				slot.Q = solution(i).Q;
+				
+				Ic = (slot.Q - slot.Q0)/obj.dt; %the required effective charge current
+				
+				target_reacheable = true; %default
+				targetIr = zeros(obj.nr,1);
+				
+				RL = zeros(obj.nr, 1);
+				
+				for r = 1:obj.nr
+					%inferring the load resistance for Q0
+					SOC = slot.Q0(r)/obj.chargeData.maximum(r);
+					RL(r) = obj.deviceData(r).getRLfromSOC(SOC);
+				
+					%the domains used for evaluating 'target_reacheable'
+					[min_Ic, max_Ic] = obj.deviceData(r).domain_iEffectiveChargeCurrent();
+					[min_In, max_In] = obj.deviceData(r).domain_iConvACDC();
+					%is this effective charge current possible?
+					if min_Ic <= Ic(r) && Ic(r) <= max_Ic
+						%the required input DC current
+						In = obj.deviceData(r).iEffectiveChargeCurrent(Ic(r)) - obj.timeLine(i).Id(r);
+						if min_In <= In && In <= max_In
+							%the required amplitude for the receiving current
+							targetIr(r) = obj.deviceData(r).iConvACDC(In);
+						else
+							target_reacheable = false;
+							break;
+						end
+					else
+						target_reacheable = false;
+						break;
+					end
+				end
+				
+				if target_reacheable
+					%the impedance matrix for this timeSlot
+					Z = obj.timeLine(i).Z + diag(RL);
+					V = solution(i).V;
+					%getting the current for V
+					I = Z\[V; zeros(obj.nr,1)];
+					it = I(1:obj.nt);
+					ir = I(obj.nt+1:end);
+					%the constraints
+					It = obj.constraints.maxCurr(1:obj.nt);
+					P = obj.constraints.maxPact;
+					tolerance = 1e-10;
+					
+					dv = fine_adjustment(Z, solution(i).V, it, ir, It, targetIr, P, tolerance, max_iterations);
+					slot.V = solution(i).V + dv;
+					new_solution(end+1) = slot;
+				else
+					%not feasible, give up
+					new_solution = [];
+					return;
+				end
+			end
+		end
+		
         %Dummie implementation
         function [solveable, solution] = solve(obj)
             solveable = false;

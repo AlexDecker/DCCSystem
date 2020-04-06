@@ -5,6 +5,7 @@
 classdef FFDummie < FeasibleFuture
     properties(Constant)
         tolerance = 1e-6
+		tolerance_fine_adjustment = 1e-10
         verbose_top = true
         verbose = true
         verbose_down = true
@@ -19,13 +20,14 @@ classdef FFDummie < FeasibleFuture
         ttl_top
         ttl
         ttl_down
+		ttl_adjustment
         nt
 		nr
         cloud
     end
     methods
         function obj = FFDummie(hashSize, nSegments, maxSize, thr_top, thr, thr_down, ttl_top,...
-            ttl, ttl_down, nt, nr)
+            ttl, ttl_down, ttl_adjustment, nt, nr)
 
             obj.hashSize = hashSize;
             obj.nSegments = nSegments;
@@ -36,10 +38,11 @@ classdef FFDummie < FeasibleFuture
             obj.ttl_top = ttl_top;
             obj.ttl = ttl;
             obj.ttl_down = ttl_down;
+			obj.ttl_adjustment = ttl_adjustment;
             obj.nt = nt;
 			obj.nr = nr;
             obj.cloud = [];
-
+			
         end
         
         function [final, new] = newFeasibleFuture(obj, initialSet, timeSlot, dt,...
@@ -82,13 +85,14 @@ classdef FFDummie < FeasibleFuture
                     timeSlot.Id, dt);
 
                 if FFDummie.verbose_top
-                    disp("Q0: "+sprintf("%f | ", Q0));
-                    disp("Rl: "+sprintf("%f | ", Rl));
-                    disp("minIr: "+sprintf("%f | ", minIr));
+					print_vector('Q0', Q0, 0);
+					print_vector('RL', Rl, 0);
+					print_vector('minIr', minIr, 0);
                 end
 
                 %inverse of the impedance matrix
-                iZ = eye(obj.nt+obj.nr)/(timeSlot.Z+diag([zeros(obj.nt,1);Rl]));
+				Z = timeSlot.Z+diag([zeros(obj.nt,1);Rl]);
+                iZ = eye(obj.nt+obj.nr)/Z;
                 
                 %number of failures: number of times when no vector was inserted due
                 %it has already been inserted or minK>maxK
@@ -111,9 +115,9 @@ classdef FFDummie < FeasibleFuture
                         minIr, constraints);
                     
                     if FFDummie.verbose
-                        disp("...v_base: "+sprintf("%f | ", v_base));
-                        disp("...it_base: "+sprintf("%f | ", abs(i_base(1:obj.nt))));
-                        disp("...ir_base: "+sprintf("%f | ", abs(i_base(obj.nt+1:end))));
+						print_vector('v_base', v_base, 1);
+						print_vector('it_base', abs(i_base(1:obj.nt)), 1);
+						print_vector('ir_base', abs(i_base(obj.nt+1:end)), 1);
                         disp(['...', num2str(minK), '<=k<=', num2str(maxK)]);
                     end
 
@@ -130,7 +134,7 @@ classdef FFDummie < FeasibleFuture
 
                         while consecutive_failures_down < obj.thr_down &&...
                             successes_top < obj.maxSize && attempts_down < obj.ttl_down &&...
-                           ~threshold_reached
+							~threshold_reached
 
                             attempts_down = attempts_down+1;
 
@@ -142,11 +146,11 @@ classdef FFDummie < FeasibleFuture
                             Q = FFDummie.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt);
                             
                             if FFDummie.verbose_down
-                                disp(['......K: ', num2str(K)]);
-                                disp("......V: "+sprintf("%f | ", V));
-                                disp("......It: "+sprintf("%f | ", abs(I(1:obj.nt))));
-                                disp("......Ir: "+sprintf("%f | ", abs(I(obj.nt+1:end))));
-                                disp("......Q: "+sprintf("%f | ", Q));
+								print_vector('K', K, 2);
+								print_vector('V', V, 2);
+								print_vector('It', abs(I(1:obj.nt)), 2);
+								print_vector('Ir', abs(I(obj.nt+1:end)), 2);
+								print_vector('Q', Q, 2);
                             end
 
                             %is it already in the cloud?
@@ -156,18 +160,94 @@ classdef FFDummie < FeasibleFuture
                                 %yes, it is
                                 consecutive_failures_down = consecutive_failures_down+1;
                             else
-                                %no, so insert it
-                                successes_down = successes_down+1;
-                                successes = successes+1;
-                                consecutive_failures_down = 0;
-                                cloud = cloud.insert(D,V,D0);
-                                %is this element a valid final state?
-                                if mean(Q>=chargeData.threshold)==1
-                                    final = struct('voltage',V,'previous',D0);
-                                    if stop_if_threshold_reached
-                                        threshold_reached = true;
-                                    end
-                                end
+                                %The next slot will consider only the center of the hypercube defined
+								%by D. Q belongs to hypercube D, but the difference between the two 
+								%stated may lead to errors. In particular, the error increases linearly
+								%regarding the time. So, we adjust the voltage so the next state becames
+								%the center of D
+								
+								[minQ, maxQ] = cloud.dediscretize(D);
+								Q_center = (minQ + maxQ)/2; %the center of D
+								
+								%In first place: is this state feasible regarding minimum charge?
+								if min(Q_center > chargeData.minimum)==0
+									%no, so it is a failure
+									consecutive_failures_down = consecutive_failures_down+1;
+								else
+									Ic_center = (Q_center - Q0)/dt; %the required effective charge current
+									
+									target_reacheable = true; %default
+									targetIr = zeros(obj.nr,1);
+									for r = 1:obj.nr
+										%the domains used for evaluating 'target_reacheable'
+										[min_Ic, max_Ic] = deviceData(r).domain_iEffectiveChargeCurrent();
+										[min_In, max_In] = deviceData(r).domain_iConvACDC();
+										%is this effective charge current possible?
+										if min_Ic <= Ic_center(r) && Ic_center(r) <= max_Ic
+											%the required input DC current
+											In = deviceData(r).iEffectiveChargeCurrent(Ic_center(r)) - timeSlot.Id(r);
+											if min_In <= In && In <= max_In
+												%the required amplitude for the receiving current
+												targetIr(r) = deviceData(r).iConvACDC(In);
+											else
+												target_reacheable = false;
+												break;
+											end
+										else
+											target_reacheable = false;
+											break;
+										end
+									end
+									
+									if max(targetIr>constraints.maxCurr(obj.nt+1:end))==1
+										%the target current is not feasible because of this constraint
+										target_reacheable = false;
+									end
+									
+									if target_reacheable
+										%search for the little adjustment of the voltage which will minimize the errors
+										dv = fine_adjustment(Z, V, I(1:obj.nt), I(obj.nt+1:end),...
+											constraints.maxCurr(1:obj.nt) - 2*FFDummie.tolerance, targetIr,...
+											constraints.maxPact - 2*FFDummie.tolerance,...
+											FFDummie.tolerance, obj.ttl_adjustment);
+										
+										V_new = V + dv;
+										
+										%just verifying the returned values..
+										I_test = iZ*(V_new);
+										It_test = I_test(1:obj.nt);
+										P_test = V_new.'*real(It_test);
+										
+										if isempty(dv) || sum(abs(It_test)>constraints.maxCurr(1:obj.nt))>0 || ...
+											P_test > obj.constraints.maxPact || ...
+-											abs(targetIr - abs(I_test(obj.nt+1:end))) > 2*FFDummie.tolerance
+
+											% the returned values are not valid
+											consecutive_failures_down = consecutive_failures_down+1;
+											
+										else
+											
+											successes_down = successes_down+1;
+											successes = successes+1;
+											consecutive_failures_down = 0;
+											
+											D_new = cloud.discretize(Q_center);
+											cloud = cloud.insert(D_new,V_new,D0);
+											
+											%is this element a valid final state?
+											if mean(Q_center>=chargeData.threshold)==1
+												final = struct('voltage',V_new,'previous',D0);
+												if stop_if_threshold_reached
+													threshold_reached = true;
+												end
+											end
+											
+										end
+									else
+										%target is unreacheable. failure
+										consecutive_failures_down = consecutive_failures_down+1;
+									end
+								end
                             end
 
                             %create a new future state
@@ -197,7 +277,8 @@ classdef FFDummie < FeasibleFuture
 
             %build the object
             new = FFDummie(obj.hashSize, obj.nSegments, obj.maxSize, obj.thr_top, obj.thr,...
-                obj.thr_down, obj.ttl_top, obj.ttl, obj.ttl_down, obj.nt, obj.nr);
+                obj.thr_down, obj.ttl_top, obj.ttl, obj.ttl_down, obj.ttl_adjustment,...
+				obj.nt, obj.nr);
 
             %insert the cloud into the object
             new.cloud = cloud;
@@ -214,7 +295,7 @@ classdef FFDummie < FeasibleFuture
 
             %build the object
             initial = FFDummie(1, obj.nSegments, 1, obj.thr_top, obj.thr, obj.thr_down,...
-                obj.ttl_top, obj.ttl, obj.ttl_down, obj.nt, obj.nr);
+                obj.ttl_top, obj.ttl, obj.ttl_down, obj.ttl_adjustment, obj.nt, obj.nr);
 
             %insert the cloud into the object
             initial.cloud = cloud;
@@ -307,10 +388,8 @@ classdef FFDummie < FeasibleFuture
             %i_base: only receiving currents
             ir_base = i_base(length(v_base)+1:end);
             
-            %the maximum k which respects the apparent-power constraint
-            maxK = sqrt(constraints.maxPapp/abs((it_base')*v_base));
             %the maximum k which respects the active-power constraint
-            maxK = min(maxK,sqrt(constraints.maxPact/real((it_base')*v_base)));
+            maxK = sqrt(constraints.maxPact/real((it_base')*v_base));
 
             for i=1:length(i_base)
                 %the maximum k which respects the current constraint for element i

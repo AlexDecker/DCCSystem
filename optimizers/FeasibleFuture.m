@@ -14,7 +14,7 @@ classdef FeasibleFuture
         
         %create a new feasible future, which means, a set of all charge vectors
         %which are reachable by at least one chargeVector from previousSet in a
-        %given timeSlot, whithout disrespecting minCharge, maxCurr, maxPapp and
+        %given timeSlot, whithout disrespecting minCharge, maxCurr and
         %maxPact constraints. See NPortPowerProblems class. If there is an element
         %in 'new' whose charge vector is more then the threshold, it must be returned
         %as 'final'. If there is more than one element, the function must choose one
