@@ -172,7 +172,7 @@ classdef DeviceData
         %always injective, so the inverse functions may not exist.
 
         %get the input amplitude for a target output (inverse of convACDC)
-        function a = iConvACDC(obj, output)
+        function [min_a, max_a] = iConvACDC(obj, output)
             
             %for input validation
             [min_current, max_current] = obj.domain_iConvACDC();
@@ -191,14 +191,17 @@ classdef DeviceData
                 i0 = find(obj.convTable(:,2)<output,1,'last');
                 %i0 cannot be empty, since output is non-negative
                 %i1 is i0+1
-                a = interp1(obj.convTable(i0:i0+1,2),obj.convTable(i0:i0+1,1), output);
+                min_a = interp1(obj.convTable(i0:i0+1,2),obj.convTable(i0:i0+1,1), output);
+				max_a = min_a; %single result, so, min=max
             else
-                a = obj.convTable(i,1);%there is an entry with the desired output
+                min_a = obj.convTable(i,1);%there is an entry with the desired output
+				i = find(obj.convTable(:,2)==output,1,'last');
+				max_a = obj.convTable(i,1);%eventually more than one single entry
             end
         end
 
         %inverse function of effectiveChargeCurrent
-        function input = iEffectiveChargeCurrent(obj, ic)
+        function [min_input, max_input] = iEffectiveChargeCurrent(obj, ic)
             
             %for input validation
             [min_current, max_current] = obj.domain_iEffectiveChargeCurrent();
@@ -213,9 +216,12 @@ classdef DeviceData
                 i0 = find(obj.chargeTable(:,2)<ic,1,'last');
                 %i0 cannot be empty, since output is non-negative
                 %i1 is i0+1
-                input = interp1(obj.chargeTable(i0:i0+1,2),obj.chargeTable(i0:i0+1,1), ic);
+                min_input = interp1(obj.chargeTable(i0:i0+1,2),obj.chargeTable(i0:i0+1,1), ic);
+				max_input = min_input; %single result, so, min=max
             else
-                input = obj.chargeTable(i,1);%there is an entry with the desired output
+                min_input = obj.chargeTable(i,1);%there is an entry with the desired output
+				i = find(obj.chargeTable(:,2)==ic,1,'last');
+				max_input = obj.chargeTable(i,1);%eventually more than one single entry
             end
         end
 
