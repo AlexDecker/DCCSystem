@@ -5,7 +5,7 @@
 classdef FFDummie < FeasibleFuture
     properties(Constant)
         tolerance = 1e-6
-		tolerance_fine_adjustment = 1e-10
+		tolerance_fine_adjustment = 1e-9
         verbose_top = true
         verbose = true
         verbose_down = true
@@ -129,12 +129,13 @@ classdef FFDummie < FeasibleFuture
                         consecutive_failures_down = 0;
                         attempts_down = 0;
 
-                        %create a new future state
-                        K = max(maxK - FFDummie.tolerance, minK + FFDummie.tolerance);
-
-                        while consecutive_failures_down < obj.thr_down &&...
-                            successes_top < obj.maxSize && attempts_down < obj.ttl_down &&...
-							~threshold_reached
+						for K = linspace(max(maxK - FFDummie.tolerance, minK + FFDummie.tolerance),...
+							min(maxK - FFDummie.tolerance, minK + FFDummie.tolerance), obj.ttl_down)
+							
+							if consecutive_failures_down >= obj.thr_down ||...
+								successes_top >= obj.maxSize || threshold_reached
+								break;
+							end
 
                             attempts_down = attempts_down+1;
 
@@ -159,6 +160,9 @@ classdef FFDummie < FeasibleFuture
                             if found
                                 %yes, it is
                                 consecutive_failures_down = consecutive_failures_down+1;
+								if FFDummie.verbose_down
+									disp('The hyper-cube is already full');
+								end
                             else
                                 %The next slot will consider only the center of the hypercube defined
 								%by D. Q belongs to hypercube D, but the difference between the two 
@@ -167,15 +171,18 @@ classdef FFDummie < FeasibleFuture
 								%the center of D
 								
 								[minQ, maxQ] = cloud.dediscretize(D);
-								Q_center = (minQ + maxQ)/2; %the center of D
+								%Q_center = (minQ + maxQ)/2; %the center of D
+								Q_center = Q; %the center of D
 								
 								%In first place: is this state feasible regarding minimum charge?
 								if min(Q_center > chargeData.minimum)==0
 									%no, so it is a failure
 									consecutive_failures_down = consecutive_failures_down+1;
+									if FFDummie.verbose_down
+										disp('The center of the hyper-cube is not feasible due the minimum charge constraint.');
+									end
 								else
 									Ic_center = (Q_center - Q0)/dt; %the required effective charge current
-									
 									target_reacheable = true; %default
 									targetIr = zeros(obj.nr,1);
 									for r = 1:obj.nr
@@ -185,73 +192,97 @@ classdef FFDummie < FeasibleFuture
 										%is this effective charge current possible?
 										if min_Ic <= Ic_center(r) && Ic_center(r) <= max_Ic
 											%the required input DC current
-											In = deviceData(r).iEffectiveChargeCurrent(Ic_center(r)) - timeSlot.Id(r);
+											In = deviceData(r).iEffectiveChargeCurrent(Ic_center(r)) + timeSlot.Id(r);
 											if min_In <= In && In <= max_In
 												%the required amplitude for the receiving current
 												targetIr(r) = deviceData(r).iConvACDC(In);
 											else
+												disp('Erro tipo 1');
 												target_reacheable = false;
 												break;
 											end
 										else
+											disp('Erro tipo 2');
 											target_reacheable = false;
 											break;
 										end
 									end
 									
+									disp('Inicio');
+									abs(I(obj.nt+1:end)) %DISP
+									targetIr %DISP
+									disp('Fim');
+									
 									if max(targetIr>constraints.maxCurr(obj.nt+1:end))==1
 										%the target current is not feasible because of this constraint
+										disp('Erro tipo 3');
 										target_reacheable = false;
 									end
 									
 									if target_reacheable
 										%search for the little adjustment of the voltage which will minimize the errors
 										dv = fine_adjustment(Z, V, I(1:obj.nt), I(obj.nt+1:end),...
-											constraints.maxCurr(1:obj.nt) - 2*FFDummie.tolerance, targetIr,...
-											constraints.maxPact - 2*FFDummie.tolerance,...
-											FFDummie.tolerance, obj.ttl_adjustment);
+											constraints.maxCurr(1:obj.nt) - FFDummie.tolerance, targetIr,...
+											constraints.maxPact - FFDummie.tolerance,...
+											FFDummie.tolerance_fine_adjustment, obj.ttl_adjustment);
 										
-										V_new = V + dv;
+										if isempty(dv)
 										
-										%just verifying the returned values..
-										I_test = iZ*(V_new);
-										It_test = I_test(1:obj.nt);
-										P_test = V_new.'*real(It_test);
-										
-										if isempty(dv) || sum(abs(It_test)>constraints.maxCurr(1:obj.nt))>0 || ...
-											P_test > obj.constraints.maxPact || ...
--											abs(targetIr - abs(I_test(obj.nt+1:end))) > 2*FFDummie.tolerance
-
 											% the returned values are not valid
 											consecutive_failures_down = consecutive_failures_down+1;
 											
-										else
-											
-											successes_down = successes_down+1;
-											successes = successes+1;
-											consecutive_failures_down = 0;
-											
-											D_new = cloud.discretize(Q_center);
-											cloud = cloud.insert(D_new,V_new,D0);
-											
-											%is this element a valid final state?
-											if mean(Q_center>=chargeData.threshold)==1
-												final = struct('voltage',V_new,'previous',D0);
-												if stop_if_threshold_reached
-													threshold_reached = true;
-												end
+											if FFDummie.verbose_down
+												disp('Fine-Adjustment failure!!!');
 											end
 											
+										else
+											
+											V_new = V + dv;
+											
+											%just verifying the returned values..
+											I_test = iZ*[V_new;zeros(obj.nr,1)];
+											It_test = I_test(1:obj.nt);
+											P_test = V_new.'*real(It_test);
+											
+											if sum(abs(It_test)>constraints.maxCurr(1:obj.nt)) > 0 || ...
+												P_test > constraints.maxPact || ...
+												sum(abs(targetIr - abs(I_test(obj.nt+1:end))) > FFDummie.tolerance) > 0
+												
+												% the returned values are not valid
+												consecutive_failures_down = consecutive_failures_down+1;
+												
+												if FFDummie.verbose_down
+													disp('Fine-Adjustment error');
+												end
+												
+											else
+											
+												successes_down = successes_down+1;
+												successes = successes+1;
+												consecutive_failures_down = 0;
+												
+												D_new = cloud.discretize(Q_center);
+												cloud = cloud.insert(D_new,V_new,D0);
+												
+												%is this element a valid final state?
+												if mean(Q_center>=chargeData.threshold)==1
+													final = struct('voltage',V_new,'previous',D0);
+													if stop_if_threshold_reached
+														threshold_reached = true;
+													end
+												end
+											end
 										end
 									else
 										%target is unreacheable. failure
 										consecutive_failures_down = consecutive_failures_down+1;
+										
+										if FFDummie.verbose_down
+											disp('The center of the hyper-cube is not feasible.');
+										end
 									end
 								end
                             end
-
-                            %create a new future state
-                            K = rand*(maxK-minK) + minK;
                         end
                         
                         if successes_down > 0

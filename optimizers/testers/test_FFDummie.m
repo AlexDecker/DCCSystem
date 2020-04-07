@@ -1,10 +1,10 @@
 %general arguments
-nr = 1;
+nr = 2;
 nt = 1;
 nSlots = 1;
-dt = 1;
+dt = 100;
 maxV = 15;
-sampleSize = 10;%the higher this value, the higher the difficulty
+sampleSize = 100;%the higher this value, the higher the difficulty
 
 %arguments for the FFDummie
 hashSize = 1000;
