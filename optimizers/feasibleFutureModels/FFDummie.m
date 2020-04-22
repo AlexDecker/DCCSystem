@@ -127,7 +127,6 @@ classdef FFDummie < FeasibleFuture
                     else
                         successes_down = 0;
                         consecutive_failures_down = 0;
-                        attempts_down = 0;
 
 						for K = linspace(max(maxK - FFDummie.tolerance, minK + FFDummie.tolerance),...
 							min(maxK - FFDummie.tolerance, minK + FFDummie.tolerance), obj.ttl_down)
@@ -136,8 +135,6 @@ classdef FFDummie < FeasibleFuture
 								successes_top >= obj.maxSize || threshold_reached
 								break;
 							end
-
-                            attempts_down = attempts_down+1;
 
                             %-K is not required to be tested, since it leads to the same abs(ir)
 
@@ -152,6 +149,7 @@ classdef FFDummie < FeasibleFuture
 								print_vector('It', abs(I(1:obj.nt)), 2);
 								print_vector('Ir', abs(I(obj.nt+1:end)), 2);
 								print_vector('Q', Q, 2);
+								print_vector('Id', timeSlot.Id, 2);
                             end
 
                             %is it already in the cloud?
@@ -171,8 +169,11 @@ classdef FFDummie < FeasibleFuture
 								%the center of D
 								
 								[minQ, maxQ] = cloud.dediscretize(D);
-								%Q_center = (minQ + maxQ)/2; %the center of D
-								Q_center = Q; %the center of D
+								Q_center = (minQ + maxQ)/2; %the center of D
+								
+								if FFDummie.verbose_down
+									print_vector('Q_center',Q_center,2);
+								end
 								
 								%In first place: is this state feasible regarding minimum charge?
 								if min(Q_center > chargeData.minimum)==0
@@ -183,43 +184,67 @@ classdef FFDummie < FeasibleFuture
 									end
 								else
 									Ic_center = (Q_center - Q0)/dt; %the required effective charge current
+									if FFDummie.verbose_down
+										print_vector('Ic_center', Ic_center, 2);
+									end
 									target_reacheable = true; %default
-									targetIr = zeros(obj.nr,1);
+									%some functions have constant intervals in their domain, so their inverse is not a function.
+									%However, as they are monotonically increasing, we can manage the inverse as a function whose
+									%image is an interval.
+									min_targetIr = zeros(obj.nr,1);
+									max_targetIr = zeros(obj.nr,1);
 									for r = 1:obj.nr
-										%the domains used for evaluating 'target_reacheable'
 										[min_Ic, max_Ic] = deviceData(r).domain_iEffectiveChargeCurrent();
-										[min_In, max_In] = deviceData(r).domain_iConvACDC();
 										%is this effective charge current possible?
 										if min_Ic <= Ic_center(r) && Ic_center(r) <= max_Ic
 											%the required input DC current
-											In = deviceData(r).iEffectiveChargeCurrent(Ic_center(r)) + timeSlot.Id(r);
-											if min_In <= In && In <= max_In
+											[In0,In1] = deviceData(r).iEffectiveChargeCurrent(Ic_center(r));
+											In0 = In0 + timeSlot.Id(r) - FFDummie.tolerance;
+											In1 = In1 + timeSlot.Id(r) + FFDummie.tolerance;
+											
+											%the interest region of the domain
+											[min_In, max_In] = deviceData(r).domain_iConvACDC();
+											min_In = max(min_In, In0);
+											max_In = min(max_In, In1);
+											if min_In <= max_In
 												%the required amplitude for the receiving current
-												targetIr(r) = deviceData(r).iConvACDC(In);
+												[min_targetIr(r), ~] = deviceData(r).iConvACDC(min_In);
+												
+												%verifying if the maximum current constraint is satisfied
+												if min_targetIr(r) + FFDummie.tolerance > constraints.maxCurr(obj.nt+r)
+													target_reacheable = false;
+												else
+													[~, max_ir] = deviceData(r).iConvACDC(max_In);
+													max_targetIr(r) = min(max_ir, constraints.maxCurr(obj.nt+r) - FFDummie.tolerance);
+												end
+												
 											else
-												disp('Erro tipo 1');
 												target_reacheable = false;
 												break;
 											end
 										else
-											disp('Erro tipo 2');
 											target_reacheable = false;
 											break;
 										end
 									end
 									
-									disp('Inicio');
-									abs(I(obj.nt+1:end)) %DISP
-									targetIr %DISP
-									disp('Fim');
+									if target_reacheable									
+										%now for targetIr itself we must choose the vector inside the interval [min_targetIr, max_target_Ir]
+										%which is the closest to the former receiving voltage vector, that is, abs(I(obj.nt+1:end))
+										
+										%first: which currents already are inside the target interval?
+										inside = abs(I(obj.nt+1:end)) <= max_targetIr & abs(I(obj.nt+1:end)) >= min_targetIr;
+										%which ones are under the interval?
+										under = abs(I(obj.nt+1:end)) < min_targetIr;
+										%what about over?
+										over = abs(I(obj.nt+1:end)) > max_targetIr;
+										
+										targetIr = inside.*abs(I(obj.nt+1:end)) + under.*min_targetIr + over.*max_targetIr;
+										
+										if FFDummie.verbose_down
+											print_vector('targetIr', targetIr, 2);
+										end
 									
-									if max(targetIr>constraints.maxCurr(obj.nt+1:end))==1
-										%the target current is not feasible because of this constraint
-										disp('Erro tipo 3');
-										target_reacheable = false;
-									end
-									
-									if target_reacheable
 										%search for the little adjustment of the voltage which will minimize the errors
 										dv = fine_adjustment(Z, V, I(1:obj.nt), I(obj.nt+1:end),...
 											constraints.maxCurr(1:obj.nt) - FFDummie.tolerance, targetIr,...
@@ -420,11 +445,11 @@ classdef FFDummie < FeasibleFuture
             ir_base = i_base(length(v_base)+1:end);
             
             %the maximum k which respects the active-power constraint
-            maxK = sqrt(constraints.maxPact/real((it_base')*v_base));
+            maxK = sqrt((constraints.maxPact - FFDummie.tolerance)/real((it_base')*v_base));
 
             for i=1:length(i_base)
                 %the maximum k which respects the current constraint for element i
-                maxK = min(maxK,constraints.maxCurr(i)/abs(i_base(i)));
+                maxK = min(maxK,(constraints.maxCurr(i) - FFDummie.tolerance)/abs(i_base(i)));
             end
             
             minK = -inf;
@@ -439,14 +464,27 @@ classdef FFDummie < FeasibleFuture
             Ir = abs(I(end-length(Id)+1:end));    
             
             Q = zeros(length(Id),1);
+			ir = zeros(length(Id),1);
+			ic = zeros(length(Id),1);
+			
             for r=1:length(Id)
                 %received current (CC)
-                ir = deviceData(r).convACDC(Ir(r));
+                ir(r) = deviceData(r).convACDC(Ir(r));
+				
                 %charging input current
-                ic = ir-Id(r);
+                ic(r) = deviceData(r).effectiveChargeCurrent(ir(r)-Id(r));
+				
                 %final charge
-                Q(r) = deviceData(r).effectiveChargeCurrent(ic)*dt+Q0(r); 
+                Q(r) = ic(r)*dt+Q0(r); 
             end
+			
+			if FFDummie.verbose_down
+				disp('Conversions: begin');
+				print_vector('Receiving current', Ir, 2);
+				print_vector('Input current', ir, 2);
+				print_vector('Charging current', ic, 2);
+				disp('Conversions: end');
+			end
         end
     end
 end

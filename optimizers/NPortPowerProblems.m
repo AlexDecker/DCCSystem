@@ -53,7 +53,6 @@ classdef NPortPowerProblems
         %constraints: struct contaning
         %   *maxCurr: vector which contains the maximum current amplitude for each 
 		%	device
-        %   *maxPapp: maximum allowed apparent power
         %   *maxPact: maximum allowed active power
         %feasibleFutureModel: an empty object from a class which inherits from 
 		%	FeasibleFuture which is used to create new objects and manage the 
@@ -115,9 +114,9 @@ classdef NPortPowerProblems
                     error(['No real values outside the main diagonal. t=',...
 						num2str(t)]);
                 end
-                if sum(imag(diag(obj.timeLine(t).Z))~=0)>0
-                    error(['Resonance is required. t=',num2str(t)]);
-                end
+                %if sum(imag(diag(obj.timeLine(t).Z))~=0)>0
+                %    error(['Resonance is required. t=',num2str(t)]);
+                %end
                 if sum(sum(obj.timeLine(t).Z-obj.timeLine(t).Z.'~=0))>0
                     error(['The mutual inductance must be symmetrical. t=',...
 						num2str(t)]);
@@ -174,11 +173,11 @@ classdef NPortPowerProblems
                 error('maxCurr must have a real positive value for each device.');
             end
 
-            [n1,n2] = size(obj.constraints.maxPapp);
-            if n1~=1 || n2~=1 || real(obj.constraints.maxPapp)~=...
-				obj.constraints.maxPapp || obj.constraints.maxPapp<=0
-                error('maxPapp must be a real non-negative scalar.');
-            end
+            %[n1,n2] = size(obj.constraints.maxPapp);
+            %if n1~=1 || n2~=1 || real(obj.constraints.maxPapp)~=...
+			%	obj.constraints.maxPapp || obj.constraints.maxPapp<=0
+            %    error('maxPapp must be a real non-negative scalar.');
+            %end
             
             [n1,n2] = size(obj.constraints.maxPact);
             if n1~=1 || n2~=1 || real(obj.constraints.maxPact)~=...
@@ -252,10 +251,10 @@ classdef NPortPowerProblems
                     result = 3;
                     return;
                 end
-                if abs(current(1:obj.nt)'*solution(:,t))>obj.constraints.maxPapp
-                    result = 4;
-                    return;
-                end
+                %if abs(current(1:obj.nt)'*solution(:,t))>obj.constraints.maxPapp
+                %    result = 4;
+                %    return;
+                %end
                 if real(current(1:obj.nt)'*solution(:,t))>obj.constraints.maxPact
                     result = 5;
                     return;
@@ -353,7 +352,11 @@ classdef NPortPowerProblems
 				Ic = (slot.Q - slot.Q0)/obj.dt; %the required effective charge current
 				
 				target_reacheable = true; %default
-				targetIr = zeros(obj.nr,1);
+				%some functions have constant intervals in their domain, so their inverse is not a function.
+				%However, as they are monotonically increasing, we can manage the inverse as a function whose
+				%image is an interval.
+				min_targetIr = zeros(obj.nr,1);
+				max_targetIr = zeros(obj.nr,1);
 				
 				RL = zeros(obj.nr, 1);
 				
@@ -362,16 +365,30 @@ classdef NPortPowerProblems
 					SOC = slot.Q0(r)/obj.chargeData.maximum(r);
 					RL(r) = obj.deviceData(r).getRLfromSOC(SOC);
 				
-					%the domains used for evaluating 'target_reacheable'
 					[min_Ic, max_Ic] = obj.deviceData(r).domain_iEffectiveChargeCurrent();
-					[min_In, max_In] = obj.deviceData(r).domain_iConvACDC();
 					%is this effective charge current possible?
 					if min_Ic <= Ic(r) && Ic(r) <= max_Ic
 						%the required input DC current
-						In = obj.deviceData(r).iEffectiveChargeCurrent(Ic(r)) - obj.timeLine(i).Id(r);
-						if min_In <= In && In <= max_In
+						[In0,In1] = deviceData(r).iEffectiveChargeCurrent(Ic(r));
+						In0 = In0 + timeSlot.Id(r) - FFDummie.tolerance;
+						In1 = In1 + timeSlot.Id(r) + FFDummie.tolerance;
+						
+						%the interest region of the domain
+						[min_In, max_In] = deviceData(r).domain_iConvACDC();
+						min_In = max(min_In, In0);
+						max_In = min(max_In, In1);
+						if min_In <= max_In
 							%the required amplitude for the receiving current
-							targetIr(r) = obj.deviceData(r).iConvACDC(In);
+							[min_targetIr(r), ~] = deviceData(r).iConvACDC(min_In);
+							
+							%verifying if the maximum current constraint is satisfied
+							if min_targetIr(r) + FFDummie.tolerance > constraints.maxCurr(obj.nt+r)
+								target_reacheable = false;
+							else
+								[~, max_ir] = deviceData(r).iConvACDC(max_In);
+								max_targetIr(r) = min(max_ir, constraints.maxCurr(obj.nt+r) - FFDummie.tolerance);
+							end
+							
 						else
 							target_reacheable = false;
 							break;

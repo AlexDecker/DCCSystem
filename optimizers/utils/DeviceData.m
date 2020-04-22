@@ -12,6 +12,9 @@
 %   converted current)
 
 classdef DeviceData
+	properties(Constant)
+		tolerance = 1e-10;
+	end
     properties(GetAccess=public, SetAccess=private)
 		rlTable
 		convTable
@@ -123,7 +126,7 @@ classdef DeviceData
             [min_SOC, max_SOC] = obj.domain_getRLfromSOC();
             if SOC > max_SOC || SOC < min_SOC || imag(SOC) ~= 0
                 error(['getRLfromSOC: SOC is a real number in [',...
-                    num2str(min_SOC),',',num2str(max_SOC),'1]']);
+                    num2str(min_SOC),',',num2str(max_SOC),']']);
             end
 
             rl = interp1(obj.rlTable(:,1),obj.rlTable(:,2),SOC);
@@ -185,18 +188,18 @@ classdef DeviceData
             end
 
             %try to find. Use 'first' if there is more than one occurrence
-            i = find(obj.convTable(:,2)==output,1,'first');
+            i = find(abs(obj.convTable(:,2) - output) <= DeviceData.tolerance, 1, 'first');
 
             if isempty(i) %did not find, then interpolate
-                i0 = find(obj.convTable(:,2)<output,1,'last');
+                i0 = find(obj.convTable(:,2) < output, 1, 'last');
                 %i0 cannot be empty, since output is non-negative
                 %i1 is i0+1
-                min_a = interp1(obj.convTable(i0:i0+1,2),obj.convTable(i0:i0+1,1), output);
+                min_a = interp1(obj.convTable(i0:i0+1, 2),obj.convTable(i0:i0+1, 1), output);
 				max_a = min_a; %single result, so, min=max
             else
-                min_a = obj.convTable(i,1);%there is an entry with the desired output
-				i = find(obj.convTable(:,2)==output,1,'last');
-				max_a = obj.convTable(i,1);%eventually more than one single entry
+                min_a = obj.convTable(i, 1);%there is an entry with the desired output
+				i = find(abs(obj.convTable(:, 2) - output) <= DeviceData.tolerance, 1, 'last');
+				max_a = obj.convTable(i, 1);%eventually more than one single entry
             end
         end
 
@@ -211,7 +214,7 @@ classdef DeviceData
                     ', ', num2str(max_current)]);
             end
             %try to find. Use 'first' if there is more than one occurrence
-            i = find(obj.chargeTable(:,2)==ic,1,'first');
+            i = find(abs(obj.chargeTable(:,2) - ic) <= DeviceData.tolerance, 1, 'first');
             if isempty(i) %did not find, then interpolate
                 i0 = find(obj.chargeTable(:,2)<ic,1,'last');
                 %i0 cannot be empty, since output is non-negative
@@ -220,7 +223,7 @@ classdef DeviceData
 				max_input = min_input; %single result, so, min=max
             else
                 min_input = obj.chargeTable(i,1);%there is an entry with the desired output
-				i = find(obj.chargeTable(:,2)==ic,1,'last');
+				i = find((obj.chargeTable(:,2) - ic) <= DeviceData.tolerance, 1, 'last');
 				max_input = obj.chargeTable(i,1);%eventually more than one single entry
             end
         end

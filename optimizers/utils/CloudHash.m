@@ -241,7 +241,8 @@ classdef CloudHash
         
         %returns the representation of charge vector q considering
         %the sub-spaces indexing. The returned vector has always
-        %natural positive values
+        %natural positive values, unless q is less than or equal
+		%to minQ
         function d = discretize(obj,q)
             d = ceil(obj.nSegments*(q-obj.minQ)./(obj.maxQ-obj.minQ))-1;
         end
