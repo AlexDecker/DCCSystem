@@ -5,6 +5,9 @@
 %This function requires statistics toolbox. If you don't have it, please use the less elaborated
 %version, randomSourcingInstance
 
+%I CURRENTLY DO NOT HAVE TIME ENOUGH TO FIX ALL BUGS, SO I ATTACHED A VERIFIER AT THE END OF THE
+%FUNCTION. THUS, IT WILL RETURN SUCCESS ONLY IF A CORRECT SOLUTION WAS FOUND
+
 function [success, solution, chargeData, constraints, timeLine, dt] = chargegenerateFeasibleNPPPInstance(deviceData, nt, nSegments, timeLine_size, sample_size)
 	
 	%melhorar essa parametrização!!!!
@@ -43,6 +46,8 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 	constraints.maxCurr = zeros(nt+nr,1);
 	constraints.maxPact = 0;
 	
+	dt = 0;%default
+	
 	%generate the succession of states%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	Q = zeros(nr, timeLine_size);
 	
@@ -70,11 +75,22 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 		end
 		Q(:,time) = Q(:,time) + normrnd(0,sigma,nr,1);
 		%guarantee the vectors are valid (the tolerance is used because Q>minimum charge)
-		Q(:,time) = max(chargeData.minimum + tolerance, min(chargeData.maximum, Q(:,time)));
+		Q(:,time) = max(chargeData.minimum + tolerance, min(chargeData.maximum - tolerance, Q(:,time)));
+	end
+	
+	if max(max(Q<=chargeData.minimum*ones(1,timeLine_size)))>0
+		disp('Something is wrong with Q generation');
+		success = false;
+		return;
 	end
 	
 	%decrease the minimum charge (relaxion)
 	chargeData.minimum = chargeData.minimum .* ((1-tolerance)*betarnd(betadist.alpha,betadist.beta,nr,1)+tolerance);
+	
+	if max(max(Q<=chargeData.minimum*ones(1,timeLine_size)))>0
+		disp('Something is wrong with Q-minimum relaxion');
+		success=false;
+	end
 	
 	%cloud as a discretization helper
 	cloud = CloudHash(1, nSegments, chargeData.minimum, chargeData.maximum, 1, nt);
@@ -86,11 +102,14 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 	for time = 1:timeLine_size
 		D = cloud.discretize(Q(:,time));
 		[min_Q, max_Q] = cloud.dediscretize(D);
-		%guarantee the limits to be respected
-		min_Q = max(chargeData.minimum+tolerance,min_Q);
-		max_Q = min(chargeData.maximum-tolerance,max_Q);
 		%the center of the segment
 		Q(:,time) = (min_Q + max_Q) / 2;	
+	end
+	
+	if max(max(Q<=chargeData.minimum*ones(1,timeLine_size)))>0
+		disp('Something is wrong with Q rectification');
+		success=false;
+		return;
 	end
 	
 	%decrease the threshold charge (relaxion)
@@ -111,10 +130,13 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 	
 		[minIR(r), maxIR(r)] = deviceData(r).domain_convACDC();
 		[minIn(r),maxIn(r)] = deviceData(r).domain_iConvACDC();
+		
+		%maximum allowed discharge current
+		[min_IC, ~] = deviceData(r).domain_effectiveChargeCurrent();
+		maxId(r) = max(maxId(r), -min_IC - tolerance);
 	
 		%this is the charging/discharging range the device may provide
 		[min_Ic, max_Ic] = deviceData(r).domain_iEffectiveChargeCurrent();
-		maxId(r) = max(maxId(r), -min_Ic - tolerance);
 		
 		%for the first timeslot
 		
@@ -179,15 +201,16 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 		
 		%load resistance for the chosen Q0
 		RL = zeros(nr,1);
-		for r = 1:nr
-			SOC = Q(r,time)/chargeData.maximum(r);
-			if SOC<0 || SOC>1
-				disp(Q(r,time));
-				disp(chargeData.maximum(r));
-				disp(chargeData.minimum(r));
-				error('SOC erradao');
+		if time == 1
+			for r = 1:nr
+				SOC = chargeData.initial(r)/chargeData.maximum(r);
+				RL(r) = deviceData(r).getRLfromSOC(SOC);
 			end
-			RL(r) = deviceData(r).getRLfromSOC(SOC);
+		else
+			for r = 1:nr
+				SOC = Q(r,time-1)/chargeData.maximum(r);
+				RL(r) = deviceData(r).getRLfromSOC(SOC);
+			end
 		end
 		
 		chosen_V = zeros(nt,1);
@@ -289,7 +312,8 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 					%The solution is ok
 					if P < chosen_P
 						chosen_V = V;
-						chosen_Z = Z;
+						%the RL matrix is dynamic and then is desconsidered here
+						chosen_Z = Z - diag([zeros(nt,1);RL]);
 						chosen_I = I_test;
 						chosen_P = P;
 					end
@@ -300,16 +324,15 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 			end
 		end
 		
-		V = zeros(nt,1);
-		solution = [solution, struct('Q',Q(:,time),'V',V)];
-		slot.Z = Z;
+		solution = [solution, struct('Q',Q(:,time),'V',chosen_V)];
+		slot.Z = chosen_Z;
 		constraints.maxCurr = max(constraints.maxCurr, abs(chosen_I));
 		constraints.maxPact = max(constraints.maxPact, chosen_P);
 		slot.Id = zeros(nr,1);
-		for i=1:nr
+		
+		for r=1:nr
 			%it is guaranteed to be inside the domain
 			in = deviceData(r).convACDC(abs(chosen_I(nt+r)));
-			
 			%chose Id(r) so that x1<=in-Id(r)<=x2
 			if in < x1
 				disp('failure!!!');
@@ -318,12 +341,18 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 			else
 				%x1-in<=-Id(r)<=x2-in
 				coeff = rand;
-				Id(r) = -((x1(r)-in)*coeff + (x2(r)-in)*(1-coeff));
-				if Id(r) > maxId(r)
+				slot.Id(r) = ((in-x1(r))*coeff + max(in-x2(r),0)*(1-coeff));
+				if slot.Id(r) > maxId(r) || slot.Id(r) < 0
 					disp('failure!!!');
 					success = false;
 					return;
 				end
+			end
+			%verify if the the resulting effective charge is correct
+			if abs(ic(r)-deviceData(r).effectiveChargeCurrent(in-slot.Id(r)))>tolerance
+				disp('failure!!!!');
+				success = false;
+				return;
 			end
 		end
 		
@@ -337,6 +366,18 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 	%constraints.maxCurr = max(minIR, constraints.maxCurr);
 	constraints.maxCurr(nt+1:end) = min(maxIR - tolerance, constraints.maxCurr(nt+1:end));
 	
+	%THIS WAS ADDED IN ORDER TO PREVENT WRONG ANSWERS CAUSED BY REMAINING BUGS
 	disp(' ');
+	ffModel = FeasibleFuture();  
+	inst = NPortSourcingProblem(timeLine,dt,chargeData,deviceData,constraints,ffModel);
+	[code,Q_list] = inst.verify([solution.V]);
+	if(code~=0)
+		%disp(Q_list);
+		%disp([chargeData.initial,[solution.Q]]);
+		disp(['ERROR CODE: ',num2str(code)]);
+		success=false;
+	elseif max(max(abs(Q_list-[chargeData.initial,[solution.Q]])>1e-6))>0
+		disp('WARNING: THE SOLUTION IS VALID BUT THE STATE SEQUENCE IS NOT.');
+	end
 	disp('finished.')
 end

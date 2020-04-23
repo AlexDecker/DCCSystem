@@ -243,9 +243,11 @@ classdef NPortPowerProblems
                     Rl = [Rl; obj.deviceData(r).getRLfromSOC(q(r)/...
                         obj.chargeData.maximum(r))];
                 end
+				
                 %calculating the phasor current vector
                 current = (obj.timeLine(t).Z+diag([zeros(nt,1);Rl]))\...
                     [solution(:,t);zeros(obj.nr,1)];
+
                 %verifying some constraints
                 if sum(abs(current)>obj.constraints.maxCurr)>0
                     result = 3;

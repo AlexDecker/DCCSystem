@@ -1,4 +1,5 @@
 clear all;
+clc;
 
 %random lookup tables for load resistance, current conversion and charge conversion
 [rlTable,convTable,chargeTable] = randomLookupTables();
@@ -15,18 +16,22 @@ for r = 1:nr
     deviceData = [deviceData; DeviceData(rlTable,convTable,chargeTable)];
 end
 
-[success, solution, chargeData, constraints, timeLine, dt] = generateFeasibleNPPPInstance(deviceData, nt, nSegments, timeLine_size, sample_size);
+success=false;
+
+while ~success
+	[success, solution, chargeData, constraints, timeLine, dt] = generateFeasibleNPPPInstance(deviceData, nt, nSegments, timeLine_size, sample_size);
+end
 
 if success
 	ffModel = FeasibleFuture();  
 	inst = NPortSourcingProblem(timeLine,dt,chargeData,deviceData,constraints,ffModel);
+	[code,Q_list] = inst.verify([solution.V]);
+	if(code~=0)
+		disp(Q_list);
+		disp([chargeData.initial,[solution.Q]]);
+		error(['FIM: ',num2str(code)]);
+	%elseif max(max(abs(Q_list-[chargeData.initial,[solution.Q]])>1e-6))>0
+	%	disp(Q_list-[chargeData.initial,[solution.Q]]);
+	%	error('FIM');
+	end
 end
-
-%Q = zeros(nr,timeLine_size);
-%Q(:,1) = chargeData.initial;
-%for time = 1:timeLine_size
-	%Q(:,time+1) = solution(time).Q;
-%end
-
-%figure;
-%plot(Q(1,:),Q(2,:));
