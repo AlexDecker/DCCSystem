@@ -343,9 +343,10 @@ classdef NPortPowerProblems
 		% - solution: vector of structures with the following fields
 		%	- approximated voltage vector
 		%	- charge vector
-		function [success, new_solution] = recover_voltage_progression(obj, solution, max_iterations)
+		function [success, new_solution, n_iterations_list] = recover_voltage_progression(obj, solution, max_iterations)
 		
 			success = true; %default
+			n_iterations_list = []; %the number of iterations of each fine_adjustment call
 			
 			new_solution.Q = [];
 			new_solution.V = [];
@@ -415,36 +416,73 @@ classdef NPortPowerProblems
 					end
 				end
 				
-				%the impedance matrix for this timeSlot
-				Z = obj.timeLine(i).Z + diag([zeros(obj.nt,1);RL]);
+				ttl = 100;
 				V = solution.V(:,i);
-				%getting the current for V
-				I = Z\[V; zeros(obj.nr,1)];
-				it = I(1:obj.nt);
-				ir = I(obj.nt+1:end);
-				%the constraints
-				It = obj.constraints.maxCurr(1:obj.nt);
-				P = obj.constraints.maxPact;
-				
-				%now for targetIr itself we must choose the vector inside the interval [min_targetIr, max_target_Ir]
-				%which is the closest to the former receiving voltage vector, that is, abs(ir)
-				
-				%first: which currents already are inside the target interval?
-				inside = abs(ir) <= max_targetIr & abs(ir) >= min_targetIr;
-				%which ones are under the interval?
-				under = abs(ir) < min_targetIr;
-				%what about over?
-				over = abs(ir) > max_targetIr;
-				
-				targetIr = inside.*abs(ir) + under.*min_targetIr + over.*max_targetIr;
-				
-				dv = fine_adjustment(Z, V, it, ir, It, targetIr, P, NPortPowerProblems.tolerance, max_iterations);
-				
-				if isempty(dv)
-					success = false;
-					return;
-				else
-					new_solution.V = [new_solution.V, V + dv];
+				while true
+					%the impedance matrix for this timeSlot
+					Z = obj.timeLine(i).Z + diag([zeros(obj.nt,1);RL]);
+					%getting the current for V
+					I = Z\[V; zeros(obj.nr,1)];
+					it = I(1:obj.nt);
+					ir = I(obj.nt+1:end);
+					%the constraints
+					It = obj.constraints.maxCurr(1:obj.nt) - NPortPowerProblems.tolerance;
+					P = obj.constraints.maxPact - NPortPowerProblems.tolerance;
+					
+					%guarantee the constraints are respected
+					if V.'*real(it) > P
+						k = sqrt(P/(V.'*real(it)));
+						V = k*V;
+						it = k*it;
+						ir = k*ir;
+					end
+					
+					for t=1:obj.nt
+						if abs(it(t)) > It(t) - NPortPowerProblems.tolerance
+							k = It(t)/abs(it(t));
+							V = k*V;
+							it = k*it;
+							ir = k*ir;
+						end
+					end
+					
+					for r=1:obj.nr
+						if abs(ir(r)) > obj.constraints.maxCurr(obj.nt+r) - NPortPowerProblems.tolerance
+							k = (obj.constraints.maxCurr(obj.nt+r) - NPortPowerProblems.tolerance)/abs(ir(r));
+							V = k*V;
+							it = k*it;
+							ir = k*ir;
+						end
+					end
+					
+					%now for targetIr itself we must choose the vector inside the interval [min_targetIr, max_target_Ir]
+					%which is the closest to the former receiving voltage vector, that is, abs(ir)
+					
+					%first: which currents already are inside the target interval?
+					inside = abs(ir) <= max_targetIr & abs(ir) >= min_targetIr;
+					%which ones are under the interval?
+					under = abs(ir) < min_targetIr;
+					%what about over?
+					over = abs(ir) > max_targetIr;
+					
+					targetIr = inside.*abs(ir) + under.*min_targetIr + over.*max_targetIr;
+					
+					[dv, n_iterations] = fine_adjustment(Z, V, it, ir, It, targetIr, P, NPortPowerProblems.tolerance, max_iterations);
+					n_iterations_list = [n_iterations_list; n_iterations];
+					
+					if isempty(dv)
+						V = solution.V(:,i) + normrnd(0,1,obj.nt,1);
+					else
+						new_solution.V = [new_solution.V, V + dv];
+						break;
+					end
+					
+					if ttl <=0 
+						success = false;
+						return;
+					else
+						ttl = ttl - 1;
+					end
 				end
 			end
 		end

@@ -7,7 +7,7 @@
 % * dv real
 %This function is based on Newton-Raphson method, which is good since all invelved equations are quadratic
 %and the solution dv=0 is near the optimum by hypothesis
-function dv_values = fine_adjustment(Z, v, it, ir, It, Ir, P, tolerance, max_iterations)
+function [dv_values,i] = fine_adjustment(Z, v, it, ir, It, Ir, P, tolerance, max_iterations)
     
 	%the return values of voltage adjustment: [] means no found result
     dv_values = [];

@@ -60,7 +60,7 @@ for noise_factor = linspace(0,0.1,30)
 		%the target
 		Ir = abs(ir_new);
 
-		dv = fine_adjustment(Z, v, it, ir, It-10*tolerance, Ir, P-10*tolerance, tolerance, max_iterations);
+		[dv, ~] = fine_adjustment(Z, v, it, ir, It-10*tolerance, Ir, P-10*tolerance, tolerance, max_iterations);
 
 		if isempty(dv)
 			failures(end) = failures(end) + 1;

@@ -54,11 +54,14 @@ while true
 	code = -1;
 	
 	result.first_success = success;
+	result.first_solution = solution;
+	
+	n_iterations_list = [];
 	
 	if success
 		
 		tic;
-		[success, solution] = P.recover_voltage_progression(solution, result.max_iterations);
+		[success, solution, n_iterations_list] = P.recover_voltage_progression(solution, result.max_iterations);
 		result.time_recover = toc;
 		
 		if success
@@ -66,7 +69,7 @@ while true
 			[code, ~] = P.verify([solution.V]);
 			if code~=0
 				errors = errors + 1;
-				disp(['SolveCharging: error number ',num2str(result)]);
+				disp(['SolveCharging: error number ',num2str(code)]);
 			else
 				found_solutions = found_solutions + 1;
 				disp(['Instance #',num2str(i),' completed: success']);
@@ -82,6 +85,7 @@ while true
 	
 	result.success = success;
 	result.solution = solution;
+	result.n_iterations_list = n_iterations_list;
 	result.code = code;
 	
 	save(['result',num2str(i),'.mat'], 'result');
@@ -89,4 +93,5 @@ while true
 	clearvars -except found_solutions failures errors i
 	
 	disp(['Successes: ',num2str(found_solutions),'; failures: ', num2str(failures), '; errors: ', num2str(errors)]);
+	i=i+1;
 end

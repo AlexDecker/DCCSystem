@@ -246,7 +246,7 @@ classdef FFDummie < FeasibleFuture
 										end
 									
 										%search for the little adjustment of the voltage which will minimize the errors
-										dv = fine_adjustment(Z, V, I(1:obj.nt), I(obj.nt+1:end),...
+										[dv,~] = fine_adjustment(Z, V, I(1:obj.nt), I(obj.nt+1:end),...
 											constraints.maxCurr(1:obj.nt) - FFDummie.tolerance, targetIr,...
 											constraints.maxPact - FFDummie.tolerance,...
 											FFDummie.tolerance_fine_adjustment, obj.ttl_adjustment);
@@ -387,6 +387,11 @@ classdef FFDummie < FeasibleFuture
 			Rl = zeros(length(Q),1);
 			for r = 1:length(Q)
                 SOC = Q(r)/chargeData.maximum(r);
+				if SOC < 0
+					error('SOC must be no less than 0');
+				elseif SOC > 1
+					error('SOC must be no more than 1');
+				end
 				Rl(r) = deviceData(r).getRLfromSOC(SOC);
 			end 
         end
@@ -476,7 +481,7 @@ classdef FFDummie < FeasibleFuture
                 ic(r) = deviceData(r).effectiveChargeCurrent(ir(r)-Id(r));
 				
                 %final charge
-                Q(r) = min(ic(r)*dt+Q0(r), chargeData.maximum(r));
+                Q(r) = min(ic(r)*dt+Q0(r), chargeData.maximum(r)-FFDummie.tolerance);
             end
 			
 			if FFDummie.verbose_down
