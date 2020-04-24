@@ -440,7 +440,12 @@ classdef NPortPowerProblems
 				
 				dv = fine_adjustment(Z, V, it, ir, It, targetIr, P, NPortPowerProblems.tolerance, max_iterations);
 				
-				new_solution.V = [new_solution.V, V + dv];
+				if isempty(dv)
+					success = false;
+					return;
+				else
+					new_solution.V = [new_solution.V, V + dv];
+				end
 			end
 		end
 		
