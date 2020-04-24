@@ -136,9 +136,9 @@ classdef CloudHash
 
         %read from the collision pool
         function [D,D0,V] = readFromPool(obj,j)
-            D = double(obj.POOL_D(:,i));
-            D0 = double(obj.POOL_D0(:,i));
-            V = double(obj.POOL_V(:,i));
+            D = double(obj.POOL_D(:,j));
+            D0 = double(obj.POOL_D0(:,j));
+            V = double(obj.POOL_V(:,j));
         end
 
         %search a given discretized vector d in the hash. return the hash index,
@@ -232,7 +232,7 @@ classdef CloudHash
 
             if j>obj.c
                 %get any element from the pool
-                [D,~,~] = obj.readFromPool(randi(obj.ps));
+                [D,~,~] = obj.readFromPool(randi(obj.pn));
             else
                 %get the element from the hash
                 [D,~,~] = obj.read(h,j);

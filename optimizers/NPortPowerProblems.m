@@ -347,18 +347,20 @@ classdef NPortPowerProblems
 		
 			success = true; %default
 			
-			new_solution = [];
+			new_solution.Q = [];
+			new_solution.V = [];
 			
 			for i=1:length(solution)
 				if i==1
 					Q0 = obj.chargeData.initial;
 				else
-					Q0 = solution(i-1).Q;
+					Q0 = solution.Q(:,i-1);
 				end
 				
-				slot.Q = solution(i).Q;
+				Q = solution.Q(:,i);
+				new_solution.Q = [new_solution.Q, Q];
 				
-				Ic = (slot.Q - Q0)/obj.dt; %the required effective charge current
+				Ic = (Q - Q0)/obj.dt; %the required effective charge current
 				
 				target_reacheable = true; %default
 				
@@ -415,7 +417,7 @@ classdef NPortPowerProblems
 				
 				%the impedance matrix for this timeSlot
 				Z = obj.timeLine(i).Z + diag([zeros(obj.nt,1);RL]);
-				V = solution(i).V;
+				V = solution.V(:,i);
 				%getting the current for V
 				I = Z\[V; zeros(obj.nr,1)];
 				it = I(1:obj.nt);
@@ -436,9 +438,9 @@ classdef NPortPowerProblems
 				
 				targetIr = inside.*abs(ir) + under.*min_targetIr + over.*max_targetIr;
 				
-				dv = fine_adjustment(Z, solution(i).V, it, ir, It, targetIr, P, NPortPowerProblems.tolerance, max_iterations);
-				slot.V = solution(i).V + dv;
-				new_solution = [new_solution;slot];
+				dv = fine_adjustment(Z, V, it, ir, It, targetIr, P, NPortPowerProblems.tolerance, max_iterations);
+				
+				new_solution.V = [new_solution.V, V + dv];
 			end
 		end
 		

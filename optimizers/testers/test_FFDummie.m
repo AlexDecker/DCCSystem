@@ -1,56 +1,70 @@
 clc;
 
-nt = 2;%randi(4)+1;
-nr = randi(4)+1;
-timeLine_size = 1;%randi(10);
-nSegments = 10;
-sample_size = 10;
-max_iterations = 1000;
-
-%arguments for the FFDummie
-hashSize = 1000;
-maxSize = nSegments^nr;
-thr_top = 1000;
-thr = 100;
-thr_down = 100;
-ttl_top = maxSize;
-ttl = maxSize;
-ttl_down = 20;
-ttl_fineAdjustment = 30;
+rng('shuffle')
 
 found_solutions = 0;
 errors = 0;
 failures = 0;
-i=1;
+i=0;
 
 while true
-	deviceData = [];
-	for r = 1:nr
+
+	result.nt = randi(3)+1;
+	result.nr = randi(3)+1;
+	result.timeLine_size = randi(10);
+	result.nSegments = 5+randi(15);
+	result.sample_size = 2+randi(10);
+	result.max_iterations = 1000;
+
+	%arguments for the FFDummie
+	result.hashSize = 1000;
+	result.maxSize = ceil((result.nSegments^result.nr)/10) + randi(result.nSegments^result.nr-ceil((result.nSegments^result.nr)/10));
+	result.thr_top = 10+randi(5);
+	result.thr = 10+randi(5);
+	result.thr_down = 10+randi(5);
+	result.ttl_top = result.maxSize;
+	result.ttl = result.maxSize;
+	result.ttl_down = 10+randi(5);
+	result.ttl_fineAdjustment = 10+randi(5);
+
+	result.deviceData = [];
+	for r = 1:result.nr
 		%random lookup tables for load resistance, current conversion and charge conversion
 		[rlTable,convTable,chargeTable] = randomLookupTables();
 		%manager for the lookup tables
-		deviceData = [deviceData; DeviceData(rlTable,convTable,chargeTable)];
+		result.deviceData = [result.deviceData; DeviceData(rlTable,convTable,chargeTable)];
 	end
 
 	success=false;
 
 	while ~success
-		[success, solution, chargeData, constraints, timeLine, dt] = generateFeasibleNPPPInstance(deviceData, nt, nSegments, timeLine_size, sample_size);
+		[success, solution, result.chargeData, result.constraints, result.timeLine, result.dt] = generateFeasibleNPPPInstance(...
+			result.deviceData, result.nt, result.nSegments, result.timeLine_size, result.sample_size);
 	end
 
-	ffModel = FFDummie(hashSize, nSegments, maxSize, thr_top, thr, thr_down, ttl_top, ttl, ttl_down, ttl_fineAdjustment, nt, nr); 
-	P = NPortSourcingProblem(timeLine,dt,chargeData,deviceData,constraints,ffModel);
-
-	[solveable, solution] = P.solve();
-
-	if solveable
+	ffModel = FFDummie(result.hashSize, result.nSegments, result.maxSize, result.thr_top, result.thr, result.thr_down, result.ttl_top,...
+		result.ttl, result.ttl_down, result.ttl_fineAdjustment, result.nt, result.nr); 
 		
-		[success, solution] = P.recover_voltage_progression(solution, max_iterations);
+	P = NPortSourcingProblem(result.timeLine,result.dt,result.chargeData,result.deviceData,result.constraints,ffModel);
+
+	tic;
+	[success, solution] = P.solve();
+	result.time_main = toc;
+	
+	code = -1;
+	
+	result.first_success = success;
+	
+	if success
+		
+		tic;
+		[success, solution] = P.recover_voltage_progression(solution, result.max_iterations);
+		result.time_recover = toc;
 		
 		if success
-			%result = P.plot(solution,false);
-			[result, ~] = P.verify([solution.V]);
-			if result~=0
+			%code = P.plot(solution,false);
+			[code, ~] = P.verify([solution.V]);
+			if code~=0
 				errors = errors + 1;
 				disp(['SolveCharging: error number ',num2str(result)]);
 			else
@@ -65,9 +79,14 @@ while true
 		disp(['Instance #',num2str(i),' completed: failure']);
 		failures = failures + 1;
 	end
-	i=i+1;
-end
 	
-disp(['Effectiveness (0-1): ', num2str(found_solutions/(found_solutions+errors+failures))])
-disp(['Errors (0-1): ', num2str(errors/(found_solutions+errors+failures))])
-disp(['Failures (0-1): ', num2str(failures/(found_solutions+errors+failures))])
+	result.success = success;
+	result.solution = solution;
+	result.code = code;
+	
+	save(['result',num2str(i),'.mat'], 'result');
+	
+	clearvars -except found_solutions failures errors i
+	
+	disp(['Successes: ',num2str(found_solutions),'; failures: ', num2str(failures), '; errors: ', num2str(errors)]);
+end

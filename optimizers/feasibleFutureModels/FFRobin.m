@@ -6,8 +6,8 @@ classdef FFDummie < FeasibleFuture
     properties(Constant)
         tolerance = 1e-6
 		tolerance_fine_adjustment = 1e-9
-        verbose_top = false
-        verbose = false
+        verbose_top = true
+        verbose = true
         verbose_down = false
     end
     properties
@@ -141,7 +141,7 @@ classdef FFDummie < FeasibleFuture
                             V = K*v_base;
                             I = K*i_base;
 
-                            Q = FFDummie.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt,chargeData);
+                            Q = FFDummie.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt);
                             
                             if FFDummie.verbose_down
 								print_vector('K', K, 2);
@@ -460,7 +460,7 @@ classdef FFDummie < FeasibleFuture
             end
         end
 
-        function Q = integrateCharge(Q0, I, Id, deviceData, dt, chargeData)
+        function Q = integrateCharge(Q0, I, Id, deviceData, dt)
             %receiving amplitudes
             Ir = abs(I(end-length(Id)+1:end));    
             
@@ -476,7 +476,7 @@ classdef FFDummie < FeasibleFuture
                 ic(r) = deviceData(r).effectiveChargeCurrent(ir(r)-Id(r));
 				
                 %final charge
-                Q(r) = min(ic(r)*dt+Q0(r), chargeData.maximum(r));
+                Q(r) = ic(r)*dt+Q0(r); 
             end
 			
 			if FFDummie.verbose_down

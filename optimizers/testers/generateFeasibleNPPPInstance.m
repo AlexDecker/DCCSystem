@@ -13,8 +13,9 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 	%melhorar essa parametrização!!!!
 	noise_factor = 2/timeLine_size; %deve ser menor que 1
 	
-	betadist.alpha = 5;
-	betadist.beta = 0.5;
+	%define the difficulty
+	betadist.alpha = 3;%5
+	betadist.beta = 2;%0.5
 	
 	betadist_sim.alpha = 2;
 	betadist_sim.beta = 2;
