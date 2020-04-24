@@ -16,6 +16,7 @@ classdef CloudHash
         c %maximum number of collisions inside the hash
         nr %number of positions of the key
         nt %number of positions of V
+		maxSize %maximum number of elements
 
         multiplier %for the hash function
         
@@ -26,7 +27,7 @@ classdef CloudHash
         V  %has the same structure of hash, but stores the V vectors
         A  %boolean value attached to each d vector
 
-        %to handle escessive collisions
+        %to handle excessive collisions
         pn %number of elements in the POOL
         ps %maximum number of elements in the POOL
         POOL_D %suppose index d
@@ -70,6 +71,7 @@ classdef CloudHash
             obj.c = ceil(obj.collision_factor*maxSize/hashSize);
             obj.nr = length(minQ);
             obj.nt = nt;
+			obj.maxSize = maxSize;
 
             %create an empty hash
             obj.D = zeros(obj.nr,obj.s*obj.c,'uint8');
@@ -118,7 +120,12 @@ classdef CloudHash
 		function s = countElements(obj)
 			s = sum(obj.LEN);
 		end
-
+		
+		%return true if the maximum capacity of the structure is reached
+		function b = isFull(obj)
+			b = obj.countElements() == obj.maxSize;
+		end
+		
         %read an entry given the indices hash(h) and inside the hash entry(j)
         function [D,D0,V] = read(obj, h, j)
             i = (h-1)*obj.c+j;

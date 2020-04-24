@@ -1,9 +1,6 @@
 clear all;
 clc;
 
-%random lookup tables for load resistance, current conversion and charge conversion
-[rlTable,convTable,chargeTable] = randomLookupTables();
-
 nt = randi(4)+1;
 nr = randi(4)+1;
 timeLine_size = randi(10);
@@ -12,6 +9,8 @@ sample_size = 1000;
 
 deviceData = [];
 for r = 1:nr
+	%random lookup tables for load resistance, current conversion and charge conversion
+	[rlTable,convTable,chargeTable] = randomLookupTables();
 	%manager for the lookup tables
     deviceData = [deviceData; DeviceData(rlTable,convTable,chargeTable)];
 end

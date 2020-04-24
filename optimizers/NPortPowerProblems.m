@@ -30,6 +30,8 @@ classdef NPortPowerProblems
     end
     properties(Constant)
         plot_colors = 'rgbkmcy'
+		tolerance = 1e-10
+		security_gap = 1e-6
     end
     methods
         %timeLine: data for each time slot. Vector of structs with the following 
@@ -339,21 +341,27 @@ classdef NPortPowerProblems
 		%great precision would lead to excessive memory usage. Therefore, this function was designed for improving the
 		%precision of a solution.
 		% - solution: vector of structures with the following fields
-		%	- previous charge vector
 		%	- approximated voltage vector
 		%	- charge vector
-		function new_solution = recover_voltage_progression(obj, solution, max_iterations)
+		function [success, new_solution] = recover_voltage_progression(obj, solution, max_iterations)
 		
+			success = true; %default
+			
 			new_solution = [];
 			
 			for i=1:length(solution)
-			
-				slot.Q0 = solution(i).Q0;
+				if i==1
+					Q0 = obj.chargeData.initial;
+				else
+					Q0 = solution(i-1).Q;
+				end
+				
 				slot.Q = solution(i).Q;
 				
-				Ic = (slot.Q - slot.Q0)/obj.dt; %the required effective charge current
+				Ic = (slot.Q - Q0)/obj.dt; %the required effective charge current
 				
 				target_reacheable = true; %default
+				
 				%some functions have constant intervals in their domain, so their inverse is not a function.
 				%However, as they are monotonically increasing, we can manage the inverse as a function whose
 				%image is an interval.
@@ -364,64 +372,73 @@ classdef NPortPowerProblems
 				
 				for r = 1:obj.nr
 					%inferring the load resistance for Q0
-					SOC = slot.Q0(r)/obj.chargeData.maximum(r);
+					SOC = Q0(r)/obj.chargeData.maximum(r);
+					if SOC < 0 || SOC >1
+						success = false;
+						return;
+					end
 					RL(r) = obj.deviceData(r).getRLfromSOC(SOC);
 				
 					[min_Ic, max_Ic] = obj.deviceData(r).domain_iEffectiveChargeCurrent();
 					%is this effective charge current possible?
 					if min_Ic <= Ic(r) && Ic(r) <= max_Ic
 						%the required input DC current
-						[In0,In1] = deviceData(r).iEffectiveChargeCurrent(Ic(r));
-						In0 = In0 + timeSlot.Id(r) - FFDummie.tolerance;
-						In1 = In1 + timeSlot.Id(r) + FFDummie.tolerance;
+						[In0, In1] = obj.deviceData(r).iEffectiveChargeCurrent(Ic(r));
+						In0 = In0 + obj.timeLine(i).Id(r) - NPortPowerProblems.security_gap;
+						In1 = In1 + obj.timeLine(i).Id(r) + NPortPowerProblems.security_gap;
 						
 						%the interest region of the domain
-						[min_In, max_In] = deviceData(r).domain_iConvACDC();
+						[min_In, max_In] = obj.deviceData(r).domain_iConvACDC();
 						min_In = max(min_In, In0);
 						max_In = min(max_In, In1);
 						if min_In <= max_In
 							%the required amplitude for the receiving current
-							[min_targetIr(r), ~] = deviceData(r).iConvACDC(min_In);
+							[min_targetIr(r), ~] = obj.deviceData(r).iConvACDC(min_In);
 							
 							%verifying if the maximum current constraint is satisfied
-							if min_targetIr(r) + FFDummie.tolerance > constraints.maxCurr(obj.nt+r)
+							if min_targetIr(r) + NPortPowerProblems.security_gap > obj.constraints.maxCurr(obj.nt+r)
 								target_reacheable = false;
 							else
-								[~, max_ir] = deviceData(r).iConvACDC(max_In);
-								max_targetIr(r) = min(max_ir, constraints.maxCurr(obj.nt+r) - FFDummie.tolerance);
+								[~, max_ir] = obj.deviceData(r).iConvACDC(max_In);
+								max_targetIr(r) = min(max_ir, obj.constraints.maxCurr(obj.nt+r) - FFDummie.tolerance);
 							end
 							
 						else
-							target_reacheable = false;
-							break;
+							success = false;
+							return;
 						end
 					else
-						target_reacheable = false;
-						break;
+						success = false;
+						return;
 					end
 				end
 				
-				if target_reacheable
-					%the impedance matrix for this timeSlot
-					Z = obj.timeLine(i).Z + diag(RL);
-					V = solution(i).V;
-					%getting the current for V
-					I = Z\[V; zeros(obj.nr,1)];
-					it = I(1:obj.nt);
-					ir = I(obj.nt+1:end);
-					%the constraints
-					It = obj.constraints.maxCurr(1:obj.nt);
-					P = obj.constraints.maxPact;
-					tolerance = 1e-10;
-					
-					dv = fine_adjustment(Z, solution(i).V, it, ir, It, targetIr, P, tolerance, max_iterations);
-					slot.V = solution(i).V + dv;
-					new_solution(end+1) = slot;
-				else
-					%not feasible, give up
-					new_solution = [];
-					return;
-				end
+				%the impedance matrix for this timeSlot
+				Z = obj.timeLine(i).Z + diag([zeros(obj.nt,1);RL]);
+				V = solution(i).V;
+				%getting the current for V
+				I = Z\[V; zeros(obj.nr,1)];
+				it = I(1:obj.nt);
+				ir = I(obj.nt+1:end);
+				%the constraints
+				It = obj.constraints.maxCurr(1:obj.nt);
+				P = obj.constraints.maxPact;
+				
+				%now for targetIr itself we must choose the vector inside the interval [min_targetIr, max_target_Ir]
+				%which is the closest to the former receiving voltage vector, that is, abs(ir)
+				
+				%first: which currents already are inside the target interval?
+				inside = abs(ir) <= max_targetIr & abs(ir) >= min_targetIr;
+				%which ones are under the interval?
+				under = abs(ir) < min_targetIr;
+				%what about over?
+				over = abs(ir) > max_targetIr;
+				
+				targetIr = inside.*abs(ir) + under.*min_targetIr + over.*max_targetIr;
+				
+				dv = fine_adjustment(Z, solution(i).V, it, ir, It, targetIr, P, NPortPowerProblems.tolerance, max_iterations);
+				slot.V = solution(i).V + dv;
+				new_solution = [new_solution;slot];
 			end
 		end
 		

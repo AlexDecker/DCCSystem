@@ -8,7 +8,7 @@ classdef FFDummie < FeasibleFuture
 		tolerance_fine_adjustment = 1e-9
         verbose_top = true
         verbose = true
-        verbose_down = true
+        verbose_down = false
     end
     properties
         hashSize
@@ -71,7 +71,7 @@ classdef FFDummie < FeasibleFuture
             attempts_top = 0;
             threshold_reached = false;
             while consecutive_failures_top < obj.thr_top && successes_top < obj.maxSize && ...
-                attempts_top < obj.ttl_top && ~threshold_reached
+                attempts_top < obj.ttl_top && ~threshold_reached && ~cloud.isFull()
 
                 attempts_top = attempts_top + 1;
                 
@@ -101,7 +101,7 @@ classdef FFDummie < FeasibleFuture
                 attempts = 0;
                 %generate a set of new states parting from Q
                 while consecutive_failures < obj.thr && successes_top < obj.maxSize &&...
-                    attempts < obj.ttl && ~threshold_reached
+                    attempts < obj.ttl && ~threshold_reached && ~cloud.isFull()
                     
                     attempts = attempts + 1;
 
@@ -132,7 +132,7 @@ classdef FFDummie < FeasibleFuture
 							min(maxK - FFDummie.tolerance, minK + FFDummie.tolerance), obj.ttl_down)
 							
 							if consecutive_failures_down >= obj.thr_down ||...
-								successes_top >= obj.maxSize || threshold_reached
+								successes_top >= obj.maxSize || threshold_reached || cloud.isFull()
 								break;
 							end
 
@@ -291,7 +291,7 @@ classdef FFDummie < FeasibleFuture
 												
 												%is this element a valid final state?
 												if mean(Q_center>=chargeData.threshold)==1
-													final = struct('voltage',V_new,'previous',D0);
+													final = struct('voltage',V_new,'previous',D0,'charge',Q_center);
 													if stop_if_threshold_reached
 														threshold_reached = true;
 													end
@@ -365,11 +365,12 @@ classdef FFDummie < FeasibleFuture
             [found, h, j, pj] = obj.cloud.search(dChargeVector);
             if found
                 if isempty(j)
-                    [~,D0,V] = obj.cloud.readFromPool(pj);
+                    [D,D0,V] = obj.cloud.readFromPool(pj);
                 else
-                    [~,D0,V] = obj.cloud.read(h,j);
+                    [D,D0,V] = obj.cloud.read(h,j);
                 end
-                d = struct('voltage',V,'previous',D0);
+				[minQ,maxQ] = obj.cloud.dediscretize(D);
+                d = struct('voltage',V,'previous',D0,'charge',(minQ + maxQ) / 2);
             else
                 d = [];
             end

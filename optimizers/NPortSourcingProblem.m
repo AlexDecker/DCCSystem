@@ -15,7 +15,8 @@ classdef NPortSourcingProblem < NPortPowerProblems
         function [solveable, solution] = solve(obj)
 			%some verifications
             obj = check(obj);
-            solution = [];
+            solution.Q = [];
+			solution.V = [];
 
             %the initial state is invalid?
             if mean(obj.chargeData.initial > obj.chargeData.minimum)~=1
@@ -37,7 +38,8 @@ classdef NPortSourcingProblem < NPortPowerProblems
                 %this function creates a set with the states which are reacheable
                 %from the previous one
                 [finalElement, fFuture] = newFeasibleFuture(obj.feasibleFutureModel,...
-                    fFutureList(end),obj.timeLine(t), obj.dt, obj.chargeData,...
+                    fFutureList(end),...
+					obj.timeLine(t), obj.dt, obj.chargeData,...
                     obj.deviceData, obj.constraints, stop_if_threshold_reached);    
 
                 %verify if there is at least one feasible state for the current 
@@ -53,7 +55,8 @@ classdef NPortSourcingProblem < NPortPowerProblems
             if ~isempty(finalElement)
                 %solution found. building the voltage progression matrix
                 element = finalElement;
-                solution = element.voltage;
+                solution.V = element.voltage;
+				solution.Q = element.charge;
 
                 for i=length(fFutureList)-1:-1:2 %the first element is the initial 
                 %state. Go back through the time slots annotating the employied
@@ -61,7 +64,8 @@ classdef NPortSourcingProblem < NPortPowerProblems
                     %search for the previous element
                     element = search(fFutureList(i),element.previous);
                     %add a column
-                    solution = [element.voltage, solution];
+                    solution.V = [element.voltage, solution.V];
+					solution.Q = [element.charge, solution.Q];
                 end
 
                 solveable = true;

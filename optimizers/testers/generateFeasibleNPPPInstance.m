@@ -124,7 +124,7 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 	minIn = zeros(nr,1);
 	maxIn = zeros(nr,1);
 	%calculating dt in order to every state to be feasible
-	dt = 0;
+	dt = tolerance;
 	%for each device
 	for r = 1:nr
 	
