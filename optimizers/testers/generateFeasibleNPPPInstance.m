@@ -61,7 +61,7 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 	%initial charge vector (uniformelly distributed value between 0 and the maximum
 	chargeData.initial = (chargeData.maximum-tolerance).*rand(nr,1) + tolerance;
 	
-	chargeData.minimum = (chargeData.initial-2*tolerance).*rand(nr,1) + tolerance;
+	chargeData.minimum = (min(chargeData.initial,Q(:, end))-2*tolerance).*rand(nr,1) + tolerance;
 	
 	%creating the intermediate charge vectors
 	for time = 1:timeLine_size-1

@@ -49,7 +49,7 @@ classdef DoubleCloudHash
         %nt: size of V
         function obj = DoubleCloudHash(hashSize, nSegments, minQ, maxQ, maxSize, nt)
             if nSegments<2
-                error('CloudHash: the number of segments must be at least 2');
+                error('DoubleCloudHash: the number of segments must be at least 2');
             end
             obj.nSegments = nSegments;
             obj.minQ = minQ;
@@ -204,7 +204,7 @@ classdef DoubleCloudHash
             %new size for the hash
             s = ceil(obj.s/n);
             %creating the new object
-            small = CloudHash(s,obj.nSegments,obj.minQ,obj.maxQ,n,obj.nt);
+            small = DoubleCloudHash(s,obj.nSegments,obj.minQ,obj.maxQ,n,obj.nt);
             %add the elements in the hash
             for h=1:obj.s
                 for i=1:obj.LEN(h)
@@ -225,7 +225,7 @@ classdef DoubleCloudHash
         function [Q,D] = any(obj)
             
             if obj.countElements()==0
-                error('CloudHash.any: the object is empty')
+                error('DoubleCloudHash.any: the object is empty')
             end
 
             h = randi(obj.s);%get any entry

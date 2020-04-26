@@ -63,9 +63,17 @@ classdef NPortSourcingProblem < NPortPowerProblems
                 %voltages
                     %search for the previous element
                     element = search(fFutureList(i),element.previous);
-                    %add a column
-                    solution.V = [element.voltage, solution.V];
-					solution.Q = [element.charge, solution.Q];
+					if isempty(element)
+						disp('Element not found!!');
+						global FFList;
+						FFList = fFutureList;
+						solveable = false;
+						return;
+					else
+						%add a column
+						solution.V = [element.voltage, solution.V];
+						solution.Q = [element.charge, solution.Q];
+					end
                 end
 
                 solveable = true;

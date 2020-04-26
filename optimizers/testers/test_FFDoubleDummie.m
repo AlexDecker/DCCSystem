@@ -14,7 +14,7 @@ while true
 	result.timeLine_size = randi(10);
 	result.nSegments = 5+randi(15);
 	result.sample_size = 2+randi(10);
-	result.max_iterations = 50;
+	result.max_iterations = 200;
 
 	%arguments for the FFDummie
 	result.hashSize = 1000;
