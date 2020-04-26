@@ -213,8 +213,10 @@ classdef DeviceData
                     num2str(ic), '; limits: ', num2str(min_current),...
                     ', ', num2str(max_current)]);
             end
+			
             %try to find. Use 'first' if there is more than one occurrence
             i = find(abs(obj.chargeTable(:,2) - ic) <= DeviceData.tolerance, 1, 'first');
+			
             if isempty(i) %did not find, then interpolate
                 i0 = find(obj.chargeTable(:,2)<ic,1,'last');
                 %i0 cannot be empty, since output is non-negative

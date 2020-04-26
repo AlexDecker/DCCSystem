@@ -25,7 +25,6 @@ while true
 	result.ttl_top = result.maxSize;
 	result.ttl = result.maxSize;
 	result.ttl_down = 10+randi(5);
-	result.ttl_fineAdjustment = 10+randi(5);
 
 	result.deviceData = [];
 	for r = 1:result.nr
@@ -42,8 +41,8 @@ while true
 			result.deviceData, result.nt, result.nSegments, result.timeLine_size, result.sample_size);
 	end
 
-	ffModel = FFDummie(result.hashSize, result.nSegments, result.maxSize, result.thr_top, result.thr, result.thr_down, result.ttl_top,...
-		result.ttl, result.ttl_down, result.ttl_fineAdjustment, result.nt, result.nr); 
+	ffModel = FFDoubleDummie(result.hashSize, result.nSegments, result.maxSize, result.thr_top, result.thr, result.thr_down,...
+		result.ttl_top, result.ttl, result.ttl_down, result.nt, result.nr); 
 		
 	P = NPortSourcingProblem(result.timeLine,result.dt,result.chargeData,result.deviceData,result.constraints,ffModel);
 
@@ -91,7 +90,7 @@ while true
 	result.n_iterations_list = n_iterations_list;
 	result.code = code;
 	
-	save(['result',num2str(i),'.mat'], 'result');
+	save(['result_double',num2str(i),'.mat'], 'result');
 	
 	clearvars -except found_solutions failures errors i
 	

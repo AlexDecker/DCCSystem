@@ -1,6 +1,6 @@
 clear all;
 
-err=1e-6;
+err=1e-10;
 
 disp('wait...');
 for k=1:100000
@@ -13,7 +13,7 @@ for k=1:100000
     out = rand*convTable(end,2);
     [min_in, max_in] = dev.iConvACDC(out);
 	r = rand; in = min_in*r+max_in*(1-r);
-    if abs(out- dev.convACDC(in))>err
+    if abs(out - dev.convACDC(in))>err
         error('Error converting ACDC');
     end
 
@@ -23,6 +23,20 @@ for k=1:100000
     if abs(ic - dev.effectiveChargeCurrent(input))>err
         error('Error converting the effective charge current');
     end
+	
+	[min_ir, max_ir] = dev.domain_convACDC();
+	r = rand; ir = min_ir*r+max_ir*(1-r);
+	in = dev.convACDC(ir);
+	ic = dev.effectiveChargeCurrent(in);
+	[in0, in1] = dev.iEffectiveChargeCurrent(ic);
+	if in+err<in0 || in>in1+err
+		error('iEffectiveChargeCurrent');
+	end
+	[ir0, ~] = dev.iConvACDC(in0);
+	[~, ir1] = dev.iConvACDC(in1);
+	if ir+err<ir0 || ir>ir1+err
+		error('iConvACDC');
+	end
 
 	
     %[min_current, max_current] = dev.domain_convACDC();

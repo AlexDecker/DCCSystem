@@ -279,12 +279,16 @@ classdef NPortPowerProblems
                 QLog = [QLog,q];
 
                 if sum(q<=obj.chargeData.minimum)>0
+					disp('Minimo');
+					q - obj.chargeData.minimum
                     result = 6;%there is an offline device
                     return;
                 end
             end
 
             if sum(q<obj.chargeData.threshold)>0
+				disp('Threshold');
+				q - obj.chargeData.threshold
                 result = 2;%could not complete all charges
             else
                 result = 0;%valid solution
@@ -351,15 +355,19 @@ classdef NPortPowerProblems
 			new_solution.Q = [];
 			new_solution.V = [];
 			
-			for i=1:length(solution)
-				if i==1
-					Q0 = obj.chargeData.initial;
-				else
-					Q0 = solution.Q(:,i-1);
-				end
+			[nt, n_slots] = size(solution.V);
+			[nr, n_slots1] = size(solution.Q);
+			
+			if nt~=obj.nt || nr~=obj.nr || n_slots1~=n_slots
+				error('Invalid sizes for the solution!!!');
+			end
+			
+			%previous charge
+			Q0 = obj.chargeData.initial;
+			
+			for i=1:n_slots
 				
 				Q = solution.Q(:,i);
-				new_solution.Q = [new_solution.Q, Q];
 				
 				Ic = (Q - Q0)/obj.dt; %the required effective charge current
 				
@@ -377,6 +385,7 @@ classdef NPortPowerProblems
 					%inferring the load resistance for Q0
 					SOC = Q0(r)/obj.chargeData.maximum(r);
 					if SOC < 0 || SOC >1
+						disp('Invalid SOC!');
 						success = false;
 						return;
 					end
@@ -387,47 +396,111 @@ classdef NPortPowerProblems
 					if min_Ic <= Ic(r) && Ic(r) <= max_Ic
 						%the required input DC current
 						[In0, In1] = obj.deviceData(r).iEffectiveChargeCurrent(Ic(r));
-						In0 = In0 + obj.timeLine(i).Id(r) - NPortPowerProblems.security_gap;
-						In1 = In1 + obj.timeLine(i).Id(r) + NPortPowerProblems.security_gap;
 						
-						%the interest region of the domain
+						In0 = In0 + obj.timeLine(i).Id(r);% - NPortPowerProblems.security_gap;
+						In1 = In1 + obj.timeLine(i).Id(r);% + NPortPowerProblems.security_gap;
+						
 						[min_In, max_In] = obj.deviceData(r).domain_iConvACDC();
-						min_In = max(min_In, In0);
-						max_In = min(max_In, In1);
-						if min_In <= max_In
-							%the required amplitude for the receiving current
-							[min_targetIr(r), ~] = obj.deviceData(r).iConvACDC(min_In);
-							
-							%verifying if the maximum current constraint is satisfied
-							if min_targetIr(r) + NPortPowerProblems.security_gap > obj.constraints.maxCurr(obj.nt+r)
-								target_reacheable = false;
+						
+						if In1-In0 < NPortPowerProblems.tolerance
+							%In1 = In0
+							In = (In1 + In0)/2;
+							if In < min_In || In > max_In
+								disp('Invalid input current!');
+								success = false;
+								return;
 							else
-								[~, max_ir] = obj.deviceData(r).iConvACDC(max_In);
-								max_targetIr(r) = min(max_ir, obj.constraints.maxCurr(obj.nt+r) - FFDummie.tolerance);
+								if abs(obj.deviceData(r).effectiveChargeCurrent(In - obj.timeLine(i).Id(r)) - Ic(r)) > NPortPowerProblems.tolerance
+									disp('Device Data imprecision!!!');
+									success = false;
+									return;
+								end
+								%the required amplitude for the receiving current
+								[min_targetIr(r), max_targetIr(r)] = obj.deviceData(r).iConvACDC(In);
+								
+								%verifying if the maximum current constraint is satisfied
+								if min_targetIr(r) + NPortPowerProblems.tolerance > obj.constraints.maxCurr(obj.nt+r)
+									disp('Very high min target ir!');
+									succes = false;
+									return;
+								else
+									max_targetIr(r) = min(max_targetIr(r), obj.constraints.maxCurr(obj.nt+r) - NPortPowerProblems.tolerance);
+								end
 							end
-							
 						else
-							success = false;
-							return;
+							%the interest region of the domain
+							min_In = max(min_In, In0);
+							max_In = min(max_In, In1);
+							if min_In <= max_In
+								
+								if abs(obj.deviceData(r).effectiveChargeCurrent(min_In - obj.timeLine(i).Id(r)) - Ic(r)) > NPortPowerProblems.tolerance ...
+									|| abs(obj.deviceData(r).effectiveChargeCurrent(max_In - obj.timeLine(i).Id(r)) - Ic(r)) > NPortPowerProblems.tolerance
+									disp('Device Data imprecision!!!');
+									success = false;
+									return;
+								end
+							
+								%the required amplitude for the receiving current
+								[min_targetIr(r), ~] = obj.deviceData(r).iConvACDC(min_In);
+								[~, max_targetIr(r)] = obj.deviceData(r).iConvACDC(max_In);
+								
+								%verifying if the maximum current constraint is satisfied
+								if min_targetIr(r) + NPortPowerProblems.tolerance > obj.constraints.maxCurr(obj.nt+r)
+									disp('Very high min target ir (2)!');
+									succes = false;
+									return;
+								else
+									max_targetIr(r) = min(max_targetIr(r), obj.constraints.maxCurr(obj.nt+r) - NPortPowerProblems.tolerance);
+								end
+								
+							else
+								disp('Invalid In interval!');
+								success = false;
+								return;
+							end
 						end
 					else
 						success = false;
 						return;
 					end
+					
+					%a simple test just to be sure targetIr interval is ok
+					coeff = rand;
+					if abs(Ic(r) - obj.deviceData(r).effectiveChargeCurrent(...
+						obj.deviceData(r).convACDC((1-coeff)*min_targetIr(r)+coeff*max_targetIr(r))-obj.timeLine(i).Id(r)...
+						)) > NPortPowerProblems.tolerance
+						error('DeviceData failure!!');
+					end
+					
+					if abs(Ic(r) - obj.deviceData(r).effectiveChargeCurrent(...
+						obj.deviceData(r).convACDC(max_targetIr(r))-obj.timeLine(i).Id(r)...
+						)) > NPortPowerProblems.tolerance
+						error('DeviceData failure!!');
+					end
+					
+					if abs(Ic(r) - obj.deviceData(r).effectiveChargeCurrent(...
+						obj.deviceData(r).convACDC(min_targetIr(r))-obj.timeLine(i).Id(r)...
+						)) > NPortPowerProblems.tolerance
+						error('DeviceData failure!!');
+					end
+					
 				end
 				
-				ttl = 100;
+				%the impedance matrix for this timeSlot
+				Z = obj.timeLine(i).Z + diag([zeros(obj.nt,1);RL]);
+				
+				%the constraints
+				It = obj.constraints.maxCurr(1:obj.nt) - 2*NPortPowerProblems.tolerance;
+				P = obj.constraints.maxPact - 2*NPortPowerProblems.tolerance;
+				
+				ttl = 1000;
 				V = solution.V(:,i);
 				while true
-					%the impedance matrix for this timeSlot
-					Z = obj.timeLine(i).Z + diag([zeros(obj.nt,1);RL]);
+					
 					%getting the current for V
 					I = Z\[V; zeros(obj.nr,1)];
 					it = I(1:obj.nt);
 					ir = I(obj.nt+1:end);
-					%the constraints
-					It = obj.constraints.maxCurr(1:obj.nt) - NPortPowerProblems.tolerance;
-					P = obj.constraints.maxPact - NPortPowerProblems.tolerance;
 					
 					%guarantee the constraints are respected
 					if V.'*real(it) > P
@@ -438,7 +511,7 @@ classdef NPortPowerProblems
 					end
 					
 					for t=1:obj.nt
-						if abs(it(t)) > It(t) - NPortPowerProblems.tolerance
+						if abs(it(t)) > It(t)
 							k = It(t)/abs(it(t));
 							V = k*V;
 							it = k*it;
@@ -473,17 +546,58 @@ classdef NPortPowerProblems
 					if isempty(dv)
 						V = solution.V(:,i) + normrnd(0,1,obj.nt,1);
 					else
-						new_solution.V = [new_solution.V, V + dv];
-						break;
+						%the new voltage vector
+						V = V + dv;
+						
+						%getting the current for the new V
+						I = Z\[V; zeros(obj.nr,1)];
+						
+						if max(abs(I)-obj.constraints.maxCurr)> NPortPowerProblems.tolerance
+							error('The obtained I vector is out of limits.');
+						end
+						
+						ir = I(obj.nt+1:end);
+						
+						%will the next state be as planned?
+						Q_ok = true;
+						for r=1:obj.nr
+							%getting the new charge
+							in = obj.deviceData(r).convACDC(abs(ir(r))) - obj.timeLine(i).Id(r);
+							q = Q0(r) + obj.dt * obj.deviceData(r).effectiveChargeCurrent(in);
+							%if q is too far from the previous solution, below the minimum or below
+							%the threshold and it is the last slot
+							if abs(Q(r)-q) > 100*obj.dt*NPortPowerProblems.tolerance ||...
+								q <= obj.chargeData.minimum(r) ||...
+								(q < obj.chargeData.threshold(r) && i==n_slots)
+								Q_ok = false;
+								break;
+							else
+								Q(r) = q;
+							end
+						end
+						
+						if Q_ok
+							%the next state is as planned
+							new_solution.Q = [new_solution.Q, Q];
+							new_solution.V = [new_solution.V, V];
+							break; %this slot is ready
+						else
+							%no, so search for other solution
+							V = solution.V(:,i) + normrnd(0,1,obj.nt,1);
+						end
 					end
 					
 					if ttl <=0 
 						success = false;
+						disp('TTL is down!');
 						return;
 					else
 						ttl = ttl - 1;
 					end
 				end
+				
+				%use the calculated charge instead of the charge of the input solution to reduce errors
+				Q0 = Q;
 			end
 		end
 		
