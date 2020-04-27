@@ -5,8 +5,8 @@
 classdef FFRandom < FeasibleFuture
     properties(Constant)
         tolerance = 1e-6
-        verbose_top = true
-        verbose = true
+        verbose_top = false
+        verbose = false
         verbose_down = false
     end
     properties

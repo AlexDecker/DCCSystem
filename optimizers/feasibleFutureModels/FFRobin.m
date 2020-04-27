@@ -13,25 +13,18 @@ classdef FFRobin < FeasibleFuture
         hashSize
         nSegments
         maxSize
-        thr
-        thr_down
         ttl
-        ttl_down
         nt
 		nr
         cloud
     end
     methods
-        function obj = FFRobin(hashSize, nSegments, maxSize, thr, thr_down,...
-            ttl, ttl_down, nt, nr)
+        function obj = FFRobin(hashSize, nSegments, maxSize, ttl, nt, nr)
 
             obj.hashSize = hashSize;
             obj.nSegments = nSegments;
             obj.maxSize = maxSize;
-            obj.thr = thr;
-            obj.thr_down = thr_down;
             obj.ttl = ttl;
-            obj.ttl_down = ttl_down;
             obj.nt = nt;
 			obj.nr = nr;
             obj.cloud = [];
@@ -42,6 +35,7 @@ classdef FFRobin < FeasibleFuture
             chargeData, deviceData, constraints, stop_if_threshold_reached)
             
             final = [];
+			threshold_reached = false;
 
             %creating the cloud to store the generated points
             cloud = DoubleCloudHash(obj.hashSize, obj.nSegments, chargeData.minimum,...
@@ -50,18 +44,6 @@ classdef FFRobin < FeasibleFuture
 			best_Q = -ones(obj.nr,1);%default: invalid
 			best_D0 = zeros(obj.nr,1);
 			best_V = zeros(obj.nt,1);
-            
-            %The seach is divided into three hierarquical levels:
-            %regular (no suffix): for each basic transmitting voltage vector
-            %Down: for each multiple of the basic transmitting voltage vector
-
-            %each search stops:
-            %-if all recent attempts of generating a new state have failed
-            %-if the cloud already has enough content
-            %-if the generated sample is too large (it avoid the lack of variability regarding
-            %the superior levels. 
-            
-            %failure: no vector was inserted 
                 
 			%get any element
 			[Q0,D0] = initialSet.cloud.any();
@@ -82,14 +64,9 @@ classdef FFRobin < FeasibleFuture
 			Z = timeSlot.Z+diag([zeros(obj.nt,1);Rl]);
 			iZ = eye(obj.nt+obj.nr)/Z;
 			
-			%number of failures: number of times when no vector was inserted due
-			%it has already been inserted or minK>maxK
-			consecutive_failures = 0;
-			successes = 0;
 			attempts = 0;
 			%generate a set of new states parting from Q
-			while consecutive_failures < obj.thr && attempts < obj.ttl &&...
-				~threshold_reached && ~cloud.isFull()
+			while attempts < obj.ttl && ~threshold_reached
 				
 				attempts = attempts + 1;
 
@@ -109,80 +86,54 @@ classdef FFRobin < FeasibleFuture
 					disp(['...', num2str(minK), '<=k<=', num2str(maxK)]);
 				end
 
-				if minK + FFRobin.tolerance > maxK - FFRobin.tolerance
-					%the range is empty
-					consecutive_failures = consecutive_failures+1;
-				else
-					successes_down = 0;
-					consecutive_failures_down = 0;
+				if minK + FFRobin.tolerance <= maxK - FFRobin.tolerance				
+					%-K is not required to be tested, since it leads to the same abs(ir)
 
-					for K = linspace(max(maxK - FFRobin.tolerance, minK + FFRobin.tolerance),...
-						min(maxK - FFRobin.tolerance, minK + FFRobin.tolerance), obj.ttl_down)
-						
-						if consecutive_failures_down >= obj.thr_down || threshold_reached || cloud.isFull()
-							break;
-						end
+					V = (maxK - FFRobin.tolerance)*v_base;
+					I = (maxK - FFRobin.tolerance)*i_base;
 
-						%-K is not required to be tested, since it leads to the same abs(ir)
-
-						V = K*v_base;
-						I = K*i_base;
-
-						Q = FFRobin.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt,chargeData);
-						
-						if FFRobin.verbose_down
-							print_vector('K', K, 2);
-							print_vector('V', V, 2);
-							print_vector('It', abs(I(1:obj.nt)), 2);
-							print_vector('Ir', abs(I(obj.nt+1:end)), 2);
-							print_vector('Q', Q, 2);
-							print_vector('Id', timeSlot.Id, 2);
-						end
-
-						successes_down = successes_down+1;
-						successes = successes+1;
-						consecutive_failures_down = 0;
-						
-						if min(Q)>min(best_Q)
-							best_D0 = D0;
-							best_V = V;
-						end
-						
-						%is this element a valid final state?
-						if stop_if_threshold_reached
-							if mean(Q >= chargeData.threshold)==1
-								final = struct('voltage',V,'previous',D0,'charge',Q);
-								threshold_reached = true;
-							end
-						end
+					Q = FFRobin.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt,chargeData);
+					
+					if FFRobin.verbose_down
+						print_vector('K', maxK - FFRobin.tolerance, 2);
+						print_vector('V', V, 2);
+						print_vector('It', abs(I(1:obj.nt)), 2);
+						print_vector('Ir', abs(I(obj.nt+1:end)), 2);
+						print_vector('Q', Q, 2);
+						print_vector('Id', timeSlot.Id, 2);
 					end
 					
-					if successes_down > 0
-						%there were some successes in the child-level
-						consecutive_failures = 0;
-					else
-						%no successes in the child-level
-						consecutive_failures = consecutive_failures + 1;
+					if min(Q)>min(best_Q)
+						best_Q = Q;
+						best_D0 = D0;
+						best_V = V;
+					end
+					
+					%is this element a valid final state?
+					if stop_if_threshold_reached
+						if mean(Q >= chargeData.threshold)==1
+							final = struct('voltage',V,'previous',D0,'charge',Q);
+							threshold_reached = true;
+						end
 					end
 				end
 			end
 			
 			if threshold_reached
 				%there is a final solution
-				cloud = cloud.insert(final.Q,final.V,final.D0);
+				cloud = cloud.insert(final.charge,final.voltage,final.previous);
 			else
 				%if there is at least a valid solution
-				if min(Q_best>=0)==1
+				if min(best_Q>=0)==1
 					%insert it
-					cloud = cloud.insert(Q_best,V_best,D0_best);
+					cloud = cloud.insert(best_Q,best_V,best_D0);
 				end
 			end
             
             disp(['New feasible future with ',num2str(cloud.countElements()), ' elements.']);
 
             %build the object
-            new = FFRobin(obj.hashSize, obj.nSegments, obj.maxSize, obj.thr,...
-                obj.thr_down, obj.ttl, obj.ttl_down, obj.nt, obj.nr);
+            new = FFRobin(obj.hashSize, obj.nSegments, obj.maxSize, obj.ttl, obj.nt, obj.nr);
 
             %insert the cloud into the object
             new.cloud = cloud;
@@ -197,8 +148,7 @@ classdef FFRobin < FeasibleFuture
             cloud = cloud.insert(chargeData.initial, zeros(obj.nt,1), zeros(obj.nr,1));
 
             %build the object
-            initial = FFRobin(1, obj.nSegments, 1, obj.thr, obj.thr_down,...
-                obj.ttl, obj.ttl_down, obj.nt, obj.nr);
+            initial = FFRobin(1, obj.nSegments, 1, obj.ttl, obj.nt, obj.nr);
 
             %insert the cloud into the object
             initial.cloud = cloud;
