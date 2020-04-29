@@ -30,7 +30,7 @@ classdef NPortPowerProblems
     end
     properties(Constant)
         plot_colors = 'rgbkmcy'
-		tolerance = 1e-10
+		tolerance = 1e-7%1e-10
 		security_gap = 1e-6
     end
     methods
@@ -340,6 +340,7 @@ classdef NPortPowerProblems
             end
         end
 		
+		%IT HAS A HUGE PROBELM!! IT DOES NOT CONSIDER THE CAPACITY OF THE BATTERIES.
 		%The FeasibleFuture represented as a hyper-dot cloud may lead to precision lacks due to compression of the
 		%intermediate states. Indeed, as the FeasibleFuture space is often too large, storing every value with 
 		%great precision would lead to excessive memory usage. Therefore, this function was designed for improving the
@@ -410,7 +411,8 @@ classdef NPortPowerProblems
 								success = false;
 								return;
 							else
-								if abs(obj.deviceData(r).effectiveChargeCurrent(In - obj.timeLine(i).Id(r)) - Ic(r)) > NPortPowerProblems.tolerance
+								if abs(obj.deviceData(r).effectiveChargeCurrent(In - obj.timeLine(i).Id(r)) - Ic(r))...
+									> NPortPowerProblems.tolerance
 									disp('Device Data imprecision!!!');
 									success = false;
 									return;
@@ -433,8 +435,10 @@ classdef NPortPowerProblems
 							max_In = min(max_In, In1);
 							if min_In <= max_In
 								
-								if abs(obj.deviceData(r).effectiveChargeCurrent(min_In - obj.timeLine(i).Id(r)) - Ic(r)) > NPortPowerProblems.tolerance ...
-									|| abs(obj.deviceData(r).effectiveChargeCurrent(max_In - obj.timeLine(i).Id(r)) - Ic(r)) > NPortPowerProblems.tolerance
+								if abs(obj.deviceData(r).effectiveChargeCurrent(min_In - obj.timeLine(i).Id(r)) - Ic(r))...
+									> NPortPowerProblems.tolerance ...
+									|| abs(obj.deviceData(r).effectiveChargeCurrent(max_In - obj.timeLine(i).Id(r)) - Ic(r))...
+									> NPortPowerProblems.tolerance
 									disp('Device Data imprecision!!!');
 									success = false;
 									return;
@@ -495,6 +499,7 @@ classdef NPortPowerProblems
 				
 				ttl = 1000;
 				V = solution.V(:,i);
+				
 				while true
 					
 					%getting the current for V

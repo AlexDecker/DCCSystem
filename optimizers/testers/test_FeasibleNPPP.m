@@ -24,6 +24,7 @@ end
 if success
 	ffModel = FeasibleFuture();  
 	inst = NPortSourcingProblem(timeLine,dt,chargeData,deviceData,constraints,ffModel);
+	%[~, solution, ~] = inst.recover_voltage_progression(struct('V',[solution.V],'Q',[solution.Q]), 1000);
 	[code,Q_list] = inst.verify([solution.V]);
 	if(code~=0)
 		disp(Q_list);

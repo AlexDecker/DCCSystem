@@ -1,7 +1,3 @@
-%some experiments failed due an error from recover_voltage_progression. However, the result files
-%store recover_voltage_progression input. This script aims fixing the data with the new version of
-%recover_voltage_progression
-
 clc;
 clear all;
 
