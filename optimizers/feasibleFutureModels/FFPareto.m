@@ -70,10 +70,10 @@ classdef FFPareto < FeasibleFuture
                 %get any element
                 [Q0,D0] = initialSet.cloud.any();
 
-                Rl = FFPareto.calculateLoadResistances(Q0, deviceData, chargeData);
+                Rl = FFUtils.calculateLoadResistances(Q0, deviceData, chargeData);
                 
                 %calculating the minimal receiving current to keep alive
-                minIr = FFPareto.calculateMinIr(Q0, deviceData, chargeData,...
+                minIr = FFUtils.calculateMinIr(Q0, deviceData, chargeData,...
                     timeSlot.Id, dt);
 
                 if FFPareto.verbose_top
@@ -103,7 +103,7 @@ classdef FFPareto < FeasibleFuture
                     i_base = iZ*[v_base; zeros(obj.nr,1)];
 
                     %range of voltage multipliers which lead to feasible states
-                    [minK, maxK] = FFPareto.calculateLimitConstants(v_base,i_base,...
+                    [minK, maxK] = FFUtils.calculateLimitConstants(v_base,i_base,...
                         minIr, constraints);
                     
                     if FFPareto.verbose
@@ -132,7 +132,7 @@ classdef FFPareto < FeasibleFuture
 							continue;
 						end
 
-						Q = FFPareto.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt,chargeData);
+						Q = FFUtils.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt,chargeData);
 						
 						if FFPareto.verbose_down
 							print_vector('K', maxK - FFPareto.tolerance, 2);
@@ -230,139 +230,6 @@ classdef FFPareto < FeasibleFuture
         %returns true if there is no element in the set
         function b = isEmpty(obj)
             b = (obj.cloud.countElements()==0);
-        end
-    end
-    methods(Static)
-        function Rl = calculateLoadResistances(Q, deviceData, chargeData)
-            %calculating the load resistance of each receiving device
-			Rl = zeros(length(Q),1);
-			for r = 1:length(Q)
-                SOC = Q(r)/chargeData.maximum(r);
-				if SOC < 0
-					error('SOC must be no less than 0');
-				elseif SOC > 1
-					error('SOC must be no more than 1');
-				end
-				Rl(r) = deviceData(r).getRLfromSOC(SOC);
-			end 
-        end
-
-        function minIr = calculateMinIr(Q0, deviceData, chargeData, Id, dt)
-            %minimal receiving amplitude for each device to stay alive (exclusive)
-            minIr = zeros(length(Q0),1);
-            for r=1:length(Q0)
-                
-                %maximum input current the system is able to provide
-                [minIn, maxIn] = deviceData(r).domain_iConvACDC();
-
-                %maximum charging current the system is able to provide
-                %(considering Id as the discharge current)
-                maxIc = deviceData(r).effectiveChargeCurrent(maxIn-Id(r));
-
-                %minimal charge current (exclusive)
-                ic = (chargeData.minimum(r)-Q0(r))/dt;
-                
-				type = 0;
-                if ic >= maxIc
-                    %impossible to provide
-                    minIr(r) = inf;
-					type = 1;
-                else
-                    if ic < deviceData(r).effectiveChargeCurrent(-Id(r))
-                        %trivial (even if there is no receiving current the device is ok)
-                        minIr(r) = -inf;
-						type = 2;
-                    else
-                        %minimal input current
-                        [input,~] = deviceData(r).iEffectiveChargeCurrent(ic);
-						input = input + Id(r);
-                        if input >= maxIn
-                            %impossible to provide
-                            minIr(r) = inf;
-							type = 3;
-                        else
-                            if input < minIn
-                                %trivial, since the output of the conversion is non-negative
-                                minIr(r) = -inf;
-								type = 4;
-                            else
-                                %minimal receiving current amplitude
-                                [minIr(r),~] = deviceData(r).iConvACDC(input);
-								type = 5;
-                            end
-                        end
-                    end
-                end
-				%transforming the limit from exclusive to inclusive by adding a very small
-				%tolerance value
-				minIr(r) = minIr(r) + FFPareto.tolerance;
-				%avoid negative "amplitudes"
-				minIr(r) = max(0, minIr(r));
-				%%%%%%For testing%%%%%%%%%%%%%%%%
-				if minIr(r)~=inf
-					in_test = deviceData(r).convACDC(minIr(r))-Id(r);
-					q_test = deviceData(r).effectiveChargeCurrent(in_test)*dt + Q0(r);
-					if q_test <= chargeData.minimum
-						type
-						ic
-						Id(r)
-						minIr(r)
-						error('Invalid minIr!!');
-					end
-				end
-				%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            end
-        end
-
-        function [minK, maxK] = calculateLimitConstants(v_base,i_base,...
-            minIr, constraints)
-            %i_base: only transmitting currents
-            it_base = i_base(1:length(v_base));
-            %i_base: only receiving currents
-            ir_base = i_base(length(v_base)+1:end);
-            
-            %the maximum k which respects the active-power constraint
-            maxK = sqrt((constraints.maxPact - FFPareto.tolerance)/real((it_base')*v_base));
-
-            for i=1:length(i_base)
-                %the maximum k which respects the current constraint for element i
-                maxK = min(maxK,(constraints.maxCurr(i) - FFPareto.tolerance)/abs(i_base(i)));
-            end
-            
-            minK = -inf;
-            for r=1:length(ir_base)
-                %the minimum k which respects the minIr (exclusive)
-                minK = max(minK, minIr(r)/abs(ir_base(r)));
-            end
-        end
-
-        function Q = integrateCharge(Q0, I, Id, deviceData, dt, chargeData)
-            %receiving amplitudes
-            Ir = abs(I(end-length(Id)+1:end));    
-            
-            Q = zeros(length(Id),1);
-			ir = zeros(length(Id),1);
-			ic = zeros(length(Id),1);
-			
-            for r=1:length(Id)
-                %received current (CC)
-                ir(r) = deviceData(r).convACDC(Ir(r));
-				
-                %charging input current
-                ic(r) = deviceData(r).effectiveChargeCurrent(ir(r)-Id(r));
-				
-                %final charge
-                Q(r) = min(ic(r)*dt+Q0(r), chargeData.maximum(r));%-FFPareto.tolerance);
-				Q(r) = max(0, Q(r));
-            end
-			
-			if FFPareto.verbose_down
-				disp('Conversions: begin');
-				print_vector('Receiving current', Ir, 2);
-				print_vector('Input current', ir, 2);
-				print_vector('Charging current', ic, 2);
-				disp('Conversions: end');
-			end
         end
     end
 end

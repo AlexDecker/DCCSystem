@@ -77,7 +77,7 @@ classdef CloudHash
             obj.D = zeros(obj.nr,obj.s*obj.c,'uint8');
             obj.LEN = zeros(obj.s,1,'uint8');
             obj.D0 = zeros(obj.nr,obj.s*obj.c,'uint8');
-            obj.V = zeros(obj.nt,obj.s*obj.c,'uint8');
+            obj.V = zeros(obj.nt,obj.s*obj.c);
             obj.A = false(obj.s,obj.c);
 
             %initializating the pools
@@ -85,7 +85,7 @@ classdef CloudHash
             obj.ps = obj.initial_pool_size;
             obj.POOL_D = zeros(obj.nr,obj.initial_pool_size,'uint8');
             obj.POOL_D0 = zeros(obj.nr,obj.initial_pool_size,'uint8');
-            obj.POOL_V = zeros(obj.nt,obj.initial_pool_size,'uint8');
+            obj.POOL_V = zeros(obj.nt,obj.initial_pool_size);
             obj.POOL_A = false(1, obj.initial_pool_size);
         end
         
@@ -99,20 +99,20 @@ classdef CloudHash
                     %resize the pool
                     obj.POOL_D = [obj.POOL_D,zeros(obj.nr,obj.ps,'uint8')];
                     obj.POOL_D0 = [obj.POOL_D0,zeros(obj.nr,obj.ps,'uint8')];
-                    obj.POOL_V = [obj.POOL_V,zeros(obj.nt,obj.ps,'uint8')];
+                    obj.POOL_V = [obj.POOL_V,zeros(obj.nt,obj.ps)];
                     obj.POOL_A = [obj.POOL_A,false(1,obj.ps)];
                     obj.ps = obj.ps*2;
                 end
                 obj.pn = obj.pn+1;
                 obj.POOL_D(:,obj.pn) = uint8(d);
                 obj.POOL_D0(:,obj.pn) = uint8(d0);
-                obj.POOL_V(:,obj.pn) = uint8(v);
+                obj.POOL_V(:,obj.pn) = v;
             else
 				%insert the new elements into the right entry
                 i = (h-1)*obj.c+double(obj.LEN(h));
                 obj.D(:,i) = uint8(d);
                 obj.D0(:,i) = uint8(d0);
-                obj.V(:,i) = uint8(v);
+                obj.V(:,i) = v;
             end
         end
 		
@@ -131,14 +131,14 @@ classdef CloudHash
             i = (h-1)*obj.c+j;
             D = double(obj.D(:,i));
             D0 = double(obj.D0(:,i));
-            V = double(obj.V(:,i));
+            V = obj.V(:,i);
         end
 
         %read from the collision pool
         function [D,D0,V] = readFromPool(obj,j)
             D = double(obj.POOL_D(:,j));
             D0 = double(obj.POOL_D0(:,j));
-            V = double(obj.POOL_V(:,j));
+            V = obj.POOL_V(:,j);
         end
 
         %search a given discretized vector d in the hash. return the hash index,
