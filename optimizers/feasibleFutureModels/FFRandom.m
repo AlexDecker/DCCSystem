@@ -82,34 +82,36 @@ classdef FFRandom < FeasibleFuture
 					disp(['...', num2str(minK), '<=k<=', num2str(maxK)]);
 				end
 			end
-			coeff = rand;
-			K = coeff * minK + (1-coeff) * maxK;
-            %-K is not required to be tested, since it leads to the same abs(ir)
-
-			V = K*v_base;
-			I = K*i_base;
-
-			Q = FFUtils.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt);
 			
-			if FFRandom.verbose_down
-				print_vector('K', K, 2);
-				print_vector('V', V, 2);
-				print_vector('It', abs(I(1:obj.nt)), 2);
-				print_vector('Ir', abs(I(obj.nt+1:end)), 2);
-				print_vector('Q', Q, 2);
-				print_vector('Id', timeSlot.Id, 2);
-			end
+			if attempts > 0
+				coeff = rand;
+				K = coeff * minK + (1-coeff) * maxK;
+				%-K is not required to be tested, since it leads to the same abs(ir)
 
-			cloud = cloud.insert(Q,V,D0);
+				V = K*v_base;
+				I = K*i_base;
+
+				Q = FFUtils.integrateCharge(Q0,I,timeSlot.Id,deviceData,dt,chargeData);
 			
-			%is this element a valid final state?
-			if mean(Q >= chargeData.threshold)==1
-				final = struct('voltage',V_new,'previous',D0,'charge',Q_center);
-				if stop_if_threshold_reached
-					threshold_reached = true;
+				if FFRandom.verbose_down
+					print_vector('K', K, 2);
+					print_vector('V', V, 2);
+					print_vector('It', abs(I(1:obj.nt)), 2);
+					print_vector('Ir', abs(I(obj.nt+1:end)), 2);
+					print_vector('Q', Q, 2);
+					print_vector('Id', timeSlot.Id, 2);
 				end
-			end
-            
+	
+				cloud = cloud.insert(Q,V,D0);
+			
+				%is this element a valid final state?
+				if mean(Q >= chargeData.threshold)==1
+					final = struct('voltage',V,'previous',D0,'charge',Q);
+					if stop_if_threshold_reached
+						threshold_reached = true;
+					end
+				end
+            end
             disp(['New feasible future with ',num2str(cloud.countElements()), ' elements.']);
 
             %build the object

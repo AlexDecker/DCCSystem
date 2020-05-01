@@ -15,8 +15,8 @@ classdef NPortChargingProblem < NPortPowerProblems
 
             %some verifications
             obj = check(obj);
-
-            solution = [];
+            solution.Q = [];
+			solution.V = [];
 
             %the initial state is already a valid solution?
             if mean(obj.chargeData.initial >= obj.chargeData.threshold)==1
@@ -25,7 +25,7 @@ classdef NPortChargingProblem < NPortPowerProblems
             end
             
             %the initial state is invalid?
-            if mean(obj.chargeData.initial <= obj.chargeData.minimal)==1
+            if mean(obj.chargeData.initial <= obj.chargeData.minimum)==1
                 solveable = false;
                 return;
             end
@@ -46,7 +46,8 @@ classdef NPortChargingProblem < NPortPowerProblems
                 if ~isempty(finalElement)
                     %solution found. building the voltage progression
                     element = finalElement;
-                    solution = element.voltage;
+                    solution.V = element.voltage;
+					solution.Q = element.charge;
 
                     for i=length(fFutureList):-1:2 %the first element is the 
                     %initial state
@@ -54,8 +55,17 @@ classdef NPortChargingProblem < NPortPowerProblems
                         %search for the previous element
                         element = search(fFutureList(i),element.previous);
 
-                        %add a column
-                        solution = [element.voltages, solution];
+                        if isempty(element)
+							disp('Element not found!!');
+							global FFList;
+							FFList = fFutureList;
+							solveable = false;
+							return;
+						else
+							%add a column
+							solution.V = [element.voltage, solution.V];
+							solution.Q = [element.charge, solution.Q];
+						end
                     end
 
                     solveable = true;

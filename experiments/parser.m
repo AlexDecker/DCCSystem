@@ -1,7 +1,9 @@
-% parser(133,'tunning_double2','_double','nr',true)
-% parser(420,'tunning4','','nt',true)
+%verify if a given measurement is dependent on a given variable_of_interest for
+%a given algorithm (from 1 to 5)
 
-function parser(n_files, folder, sufix, variable_of_interest, categorical)
+function parser(n_files, folder, prefix, algorithm, measurement,...
+	variable_of_interest, boxplots, marker)
+	
 	variable = [];
 	number_of_success = [];
 	number_of_occurrences = [];
@@ -9,16 +11,11 @@ function parser(n_files, folder, sufix, variable_of_interest, categorical)
 	x=[];
 	y=[];
 
-	first_success = 0;
-	second_success = 0;
-	third_success = 0;
-	failures = 0;
-
 	for i=0:n_files-1
-		load([folder,'\result',sufix, num2str(i),'.mat']);
+		load([folder,'\',prefix, num2str(i),'.mat']);
 		
 		x=[x;result.(variable_of_interest)];
-		y=[y;result.success];
+		y=[y;result.ret(algorithm).(measurement)];
 		
 		ind = find(variable==result.(variable_of_interest));
 		if isempty(ind)
@@ -28,16 +25,11 @@ function parser(n_files, folder, sufix, variable_of_interest, categorical)
 			ind = length(variable);
 		end
 		
-		if result.success
+		if result.ret(algorithm).success && result.ret(algorithm).code==0
 			number_of_success(ind) = number_of_success(ind)+1;
 		end
 		
 		number_of_occurrences(ind) = number_of_occurrences(ind)+1;
-		
-		failures = failures + (1-result.success);
-		first_success = first_success + result.first_success;
-		second_success = second_success + result.success;
-		third_success = third_success + result.success*(result.code==0);
 		
 		clear result;
 	end
@@ -46,22 +38,30 @@ function parser(n_files, folder, sufix, variable_of_interest, categorical)
 	number_of_success = number_of_success(ind);
 	number_of_occurrences = number_of_occurrences(ind);
 
-	disp(['Initial success: ', num2str(first_success)]);
-	disp(['Success after V rect: ', num2str(second_success)]);
-	disp(['Errors after V rect: ', num2str(third_success)]);
-	disp(['Failures after V rect: ', num2str(failures)]);
-
-	if ~categorical
+	if ~strcmp('success',measurement)
 		s = corr(x,y,'type','Spearman');
 		p = corr(x,y,'type','Pearson');
 		disp(['Pearson correlation: ', num2str(p)]);
 		disp(['Spearman correlation: ', num2str(s)]);
+		if boxplots
+			boxplot(y,x);
+		else
+			y_variable = variable;
+			e_variable = variable;
+			for k=1:length(variable)
+				y_variable(k) = mean(y(x==variable(k)));
+				%e_variable(k) = tinv([0.05  0.95],sum(x==variable(k)-1))*...
+				%	std(y(x==variable(k)))/sqrt(sum(x==variable(k)));
+			end
+			%errorbar(variable,y_variable,e_variable,'o');
+			plot(variable,y_variable,'-');
+		end
 	else
 		%chi-squared test https://www.mathworks.com/help/stats/crosstab.html
 		[~,chi,p]=crosstab(x,y);
 		disp(['chi-square statistic: ', num2str(chi)]);
 		disp(['p-value (h0: independence): ', num2str(p)]);
+		plot(variable,number_of_success./number_of_occurrences,marker, 'linewidth', 3);
+		%plot(variable,number_of_success,marker, 'linewidth', 3);
 	end
-
-	plot(variable,number_of_success./number_of_occurrences);
 end

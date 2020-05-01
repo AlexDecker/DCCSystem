@@ -222,19 +222,21 @@ classdef NPortPowerProblems
             q = obj.chargeData.initial;
             QLog = q;
 
-            [nt, time] = size(solution);
-            if nt~=obj.nt
-                result = 1;
-                return;
-            end
-
-            if time==0
+			[nt, time] = size(solution);
+			
+			if time==0
                 %it is only possible if the devices start charged
                 if mean(obj.chargeData.initial>=obj.chargeData.threshold)==1
                     result = 0;%ok, valid
                 else
                     result = 2;%unreached
                 end
+				return;
+            end
+			
+            if nt~=obj.nt
+                result = 1;
+                return;
             end
 
             %integrating...

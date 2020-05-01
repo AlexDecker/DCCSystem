@@ -46,6 +46,8 @@ classdef NPortSourcingProblem < NPortPowerProblems
                 %time slot
                 if isEmpty(fFuture)
                     solveable = false;
+					global lifetime_global;
+					lifetime_global = t-1;
                     return;%No, so there is no solution.
                 end
 
@@ -53,6 +55,10 @@ classdef NPortSourcingProblem < NPortPowerProblems
             end
             
             if ~isempty(finalElement)
+				
+				global lifetime_global;
+				lifetime_global = obj.maxTau+1;
+				
                 %solution found. building the voltage progression matrix
                 element = finalElement;
                 solution.V = element.voltage;
@@ -80,6 +86,8 @@ classdef NPortSourcingProblem < NPortPowerProblems
             else
                 %no solution found
                 solveable = false;
+				global lifetime_global;
+				lifetime_global = obj.maxTau;
             end 
         end
     end

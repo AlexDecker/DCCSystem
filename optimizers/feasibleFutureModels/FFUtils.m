@@ -15,8 +15,10 @@ classdef FFUtils
 			for r = 1:length(Q)
                 SOC = Q(r)/chargeData.maximum(r);
 				if SOC < 0
+					SOC
 					error('SOC must be no less than 0');
 				elseif SOC > 1
+					SOC
 					error('SOC must be no more than 1');
 				end
 				Rl(r) = deviceData(r).getRLfromSOC(SOC);

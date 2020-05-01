@@ -179,11 +179,11 @@ classdef FFDummie < FeasibleFuture
 								end
 								
 								%In first place: is this state feasible regarding minimum charge?
-								if min(Q_center > chargeData.minimum)==0
+								if min(Q_center > chargeData.minimum)==0 || min(Q_center <= chargeData.maximum)==0
 									%no, so it is a failure
 									consecutive_failures_down = consecutive_failures_down+1;
 									if FFDummie.verbose_down
-										disp('The center of the hyper-cube is not feasible due the minimum charge constraint.');
+										disp('The center of the hyper-cube is not feasible due the charge constraints.');
 									end
 								else
 									Ic_center = (Q_center - Q0)/dt; %the required effective charge current
