@@ -62,13 +62,23 @@ classdef FFPareto < FeasibleFuture
             successes_top = 0;
             attempts_top = 0;
             threshold_reached = false;
+			
+			%create the set of states which were not returned yet
+			initialSet.cloud = createSummary(initialSet.cloud);
+			
             while consecutive_failures_top < obj.thr_top && successes_top < obj.maxSize && ...
                 attempts_top < obj.ttl_top && ~threshold_reached && ~cloud.isFull()
 
                 attempts_top = attempts_top + 1;
                 
                 %get any element
-                [Q0,D0] = initialSet.cloud.any();
+                %[Q0,D0] = initialSet.cloud.any();
+				
+				%return a new state vector
+				[initialSet.cloud,D0,Q0] = initialSet.cloud.newStateVector();
+				if isempty(D0)
+					break;
+				end
 
                 Rl = FFUtils.calculateLoadResistances(Q0, deviceData, chargeData);
                 

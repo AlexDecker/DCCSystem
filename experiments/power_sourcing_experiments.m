@@ -13,7 +13,7 @@ while true
 	result.nr = randi(3)+1;
 	result.timeLine_size = randi(10);
 	result.nSegments = 5+randi(15);
-	result.sample_size = 2+randi(10);
+	result.sample_size = 12;%2+randi(10);
 
 	result.deviceData = [];
 	for r = 1:result.nr

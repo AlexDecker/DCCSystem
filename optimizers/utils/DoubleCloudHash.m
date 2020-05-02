@@ -38,6 +38,9 @@ classdef DoubleCloudHash
         nSegments
         minQ
         maxQ
+		
+		%this vector is used to return only new vectors when calling newStateVector
+		summary
     end
 	
     methods(Access=public)
@@ -88,8 +91,43 @@ classdef DoubleCloudHash
             obj.POOL_D0 = zeros(obj.nr,obj.initial_pool_size,'uint8');
             obj.POOL_V = zeros(obj.nt,obj.initial_pool_size);
             obj.POOL_A = false(1, obj.initial_pool_size);
+			
+			obj.summary = zeros(obj.nr,0);
         end
         
+		function obj = createSummary(obj)
+			for h = 1:obj.s
+				for j = min(double(obj.LEN(h)),double(obj.c))
+					if j>=1
+						[D,~,~,~] = obj.read(h, j);
+						obj.summary = [obj.summary,D];
+					end
+				end
+			end
+			obj.summary = [obj.summary,obj.POOL_D(:,1:obj.pn)];
+		end
+		
+		function [obj,D,Q] = newStateVector(obj)
+			[~,len] = size(obj.summary);
+			if len>0
+				D = obj.summary(:, 1);
+				obj.summary = obj.summary(:, 2:end);
+				[found,h,j,pj] = obj.search(double(D));
+				if ~found
+					error('Something is wrong with newStateVector');
+				else
+					if isempty(j)
+						[D,Q,~,~] = obj.readFromPool(pj);
+					else
+						[D,Q,~,~] = obj.read(h, j);
+					end
+				end
+			else
+				D = [];
+				Q = [];
+			end
+		end
+		
         %insert a value which is not already inside the hash
         function obj = insert(obj,q,v,d0)
 			d = obj.discretize(q);

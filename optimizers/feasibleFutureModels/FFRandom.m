@@ -112,7 +112,7 @@ classdef FFRandom < FeasibleFuture
 					end
 				end
             end
-            disp(['New feasible future with ',num2str(cloud.countElements()), ' elements.']);
+            %disp(['New feasible future with ',num2str(cloud.countElements()), ' elements.']);
 
             %build the object
             new = FFRandom(obj.hashSize, obj.nSegments, obj.maxSize, obj.ttl, obj.nt, obj.nr);
