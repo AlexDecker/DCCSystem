@@ -11,7 +11,8 @@ function parser(n_files, folder, prefix, algorithm, measurement,...
 	x=[];
 	y=[];
 
-	for i=0:n_files-1
+	%for i=0:n_files-1
+	for i=1:n_files-1
 		load([folder,'\',prefix, num2str(i),'.mat']);
 		
 		x=[x;result.(variable_of_interest)];
@@ -43,6 +44,8 @@ function parser(n_files, folder, prefix, algorithm, measurement,...
 		p = corr(x,y,'type','Pearson');
 		disp(['Pearson correlation: ', num2str(p)]);
 		disp(['Spearman correlation: ', num2str(s)]);
+		h = kruskalwallis(y,x,'off');
+		disp(['Kruskal-Wallis test: p-value (H0: independency): ',num2str(h)]);
 		if boxplots
 			boxplot(y,x);
 		else
@@ -50,18 +53,27 @@ function parser(n_files, folder, prefix, algorithm, measurement,...
 			e_variable = variable;
 			for k=1:length(variable)
 				y_variable(k) = mean(y(x==variable(k)));
-				%e_variable(k) = tinv([0.05  0.95],sum(x==variable(k)-1))*...
-				%	std(y(x==variable(k)))/sqrt(sum(x==variable(k)));
+				t = tinv(0.9,sum(x==variable(k))-1);
+				s = std(y(x==variable(k)));
+				sqrt_n = sqrt(sum(x==variable(k)));
+				e_variable(k) = t*s/sqrt_n;
 			end
-			%errorbar(variable,y_variable,e_variable,'o');
-			plot(variable,y_variable,'-');
+			errorbar(variable,y_variable,e_variable,marker,'linewidth',3);
 		end
+		ylim([0,inf])		
 	else
 		%chi-squared test https://www.mathworks.com/help/stats/crosstab.html
 		[~,chi,p]=crosstab(x,y);
 		disp(['chi-square statistic: ', num2str(chi)]);
 		disp(['p-value (h0: independence): ', num2str(p)]);
-		plot(variable,number_of_success./number_of_occurrences,marker, 'linewidth', 3);
-		%plot(variable,number_of_success,marker, 'linewidth', 3);
+		err = norminv(1-0.1/2) ./...
+			(number_of_occurrences.*sqrt(number_of_occurrences)) .*...
+			sqrt(number_of_success.*(number_of_occurrences-number_of_success));
+		errorbar(variable,number_of_success./number_of_occurrences,...
+			err,marker, 'linewidth', 3);
+		ylim([0,1])
 	end
+	xlim([min(variable),max(variable)])
+	set(gca,'fontsize', 12);
+	set(gca,'XTick',min(variable):max(variable));
 end

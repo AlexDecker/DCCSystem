@@ -4,9 +4,14 @@ clear all;
 %n_files = 100;
 %folder = 'power_sourcing';
 %prefix = 'exp_';
+
+%n_files = 128;
+%folder = 'charging';
+%prefix = 'exp_charging_';
+
 n_files = 128;
-folder = 'charging';
-prefix = 'exp_charging_';
+folder = 'final';
+prefix = 'exp_';
 
 found_solutions = 0;
 failures = 0;
