@@ -2,7 +2,7 @@
 %on a given variable_of_interest for a given algorithm (from 1 to 5)
 
 function parser_charging(n_files, folder, prefix, algorithm,...
-	variable_of_interest, marker)
+	variable_of_interest, marker, use_vector)
 
 	x=[];
 	y=[];
@@ -10,7 +10,7 @@ function parser_charging(n_files, folder, prefix, algorithm,...
 	for i=1:n_files-1
 		load([folder,'\',prefix, num2str(i),'.mat']);
 		
-		if result.ret(algorithm).success && result.ret(algorithm).code==0
+		if result.ret(algorithm).success && result.ret(algorithm).code==0 && use_vector(i)
 		%if min([result.ret.success])==1 && max(abs([result.ret.code]))==0
 			
 			len = length(result.timeLine);
@@ -24,6 +24,7 @@ function parser_charging(n_files, folder, prefix, algorithm,...
 		
 		clear result;
 	end
+	
 	x_unique = unique(x);
 	x_unique = sort(x_unique);
 	
