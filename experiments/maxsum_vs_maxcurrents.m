@@ -11,11 +11,17 @@ for i=1:350
 	clear result;
 end
 
-p1 = 94/99;%maxsum_success/total
-p2 = 45/99;%maxcurrents_success/total
+%p1 = 94/99;%maxsum_success/total
+%p2 = 45/99;%maxcurrents_success/total
 
-n1 = 99;%total;
-n2 = 99;%total;
+%n1 = 99;%total;
+%n2 = 99;%total;
+
+p1 = maxsum_success/total
+p2 = maxcurrents_success/total
+
+n1 = total;
+n2 = total;
 
 u = p1-p2;
 s = sqrt((p1*(1-p1))/n1 + (p2*(1-p2))/n2);
