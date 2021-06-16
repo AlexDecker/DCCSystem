@@ -8,10 +8,10 @@
 %I CURRENTLY DO NOT HAVE TIME ENOUGH TO FIX ALL BUGS, SO I ATTACHED A VERIFIER AT THE END OF THE
 %FUNCTION. THUS, IT WILL RETURN SUCCESS ONLY IF A CORRECT SOLUTION WAS FOUND
 
-function [success, solution, chargeData, constraints, timeLine, dt] = chargegenerateFeasibleNPPPInstance(deviceData, nt, nSegments, timeLine_size, sample_size)
+function [success, solution, chargeData, constraints, timeLine, dt] = generateFeasibleNPPPInstance(deviceData, nt, nSegments, timeLine_size, sample_size)
 	
-	%melhorar essa parametrização!!!!
-	noise_factor = 2/timeLine_size; %deve ser menor que 1
+	%TODO: improve this parametrization
+	noise_factor = 2/timeLine_size; %must be less than 1
 	
 	%define the difficulty
 	betadist.alpha = 3;%5
@@ -232,10 +232,15 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 			%generating a valid Z matrix for which ir is feasible and, therefore,
 			%Zr*ir = M*pinv(M)*Zr*ir
 			
-			%wM is assumed to be in [0..1], so 
-			wMR = betarnd(betadist_sim.alpha,betadist_sim.beta,nr);
+			%wM is assumed to be in [0..inf], so 
+			wMR = w * gamrnd(gammadist.shape, gammadist.scale, nr);
 			%M must be symmetrical and with main diagona equal to zero
-			wMR = wMR-diag(diag(wMR)); wMR = wMR+wMR.';
+			wMR = wMR-diag(diag(wMR));
+			for i = 1:nr
+				for j = i+1:nr
+					wMR(i,j) = wMR(j,i);
+				end
+			end
 			
 			ZR = diag(RR + RL) - (1i)*wMR;
 			
@@ -252,13 +257,15 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 			%M has nr rows and nt cols
 			if nr < nt
 				%a random M will probabily lead to a solveable undeterminated system
-				M = -(1i)*betarnd(betadist_sim.alpha,betadist_sim.beta,nr,nt);
-				while (max(max(abs(ZR*ir-M*pinv(M)*ZR*ir)))>tolerance)
+				while true
 					disp('Searching for a good M...');
-					M = -(1i)*betarnd(betadist_sim.alpha,betadist_sim.beta,nr,nt);
+					M = -(1i) * w * gamrnd(gammadist.shape, gammadist.scale, nr, nt);
+					if (max(max(abs(ZR * ir - M * pinv(M) * ZR * ir))) > tolerance)
+						break;
+					end
 				end
 				
-				it = -pinv(M)*ZR*ir + (eye(nt)-pinv(M)*M)*(normrnd(0,10,nt,1)+(1i)*normrnd(0,10,nt,1));
+				it = -pinv(M) * ZR * ir + (eye(nt) - pinv(M) * M) * (normrnd(0,10,nt,1) + (1i) * normrnd(0,10,nt,1));
 			else
 				%One ir leads to one V, which MUST be real. So, M must be carefully built
 				%in order to guarantee that.
@@ -268,8 +275,16 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 			%M is empty when the generator fails
 			if ~isempty(M)
 				rt = -ones(nt,1);
-				iwMT = -(1i)*betarnd(betadist_sim.alpha,betadist_sim.beta,nt);
-				iwMT = (iwMT + iwMT.') / 2;
+				
+				%wM is assumed to be in [0..inf], so 
+				iwMT = -1i * w * gamrnd(gammadist.shape, gammadist.scale, nt);
+				%M must be symmetrical and with main diagona equal to zero
+				iwMT = iwMT - diag(diag(iwMT));
+				for i = 1:nt
+					for j = i+1:nt
+						iwMT(i,j) = iwMT(j,i);
+					end
+				end
 				
 				while true
 				
@@ -277,7 +292,7 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 					v = (1i)*iwMT*real(it)-imag(M.'*ir);
 					rt = v./imag(it);
 					
-					%rt cannot be zero
+					%rt cannot be zero or less
 					if max(rt<=0)==0
 						break;
 					end
@@ -285,7 +300,7 @@ function [success, solution, chargeData, constraints, timeLine, dt] = chargegene
 					%fix rt_k
 					[~,k] = min(rt);
 					
-					dm = (1i)*v(k)/real(it(k)) - (1i)*sign(imag(it(k)))*sign(real(it(k)))*gamrnd(1,2);
+					dm = (1i)*v(k)/real(it(k)) - (1i)*sign(imag(it(k)))*sign(real(it(k)))*gamrnd(1,2); %TEM COMO GARANTIR QUE > 0?? mudar argumentos e o resto das construções de M
 					
 					iwMT(k,k) = iwMT(k,k) + dm;
 				end

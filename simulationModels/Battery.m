@@ -52,13 +52,19 @@ classdef Battery
 
 			% variables: [j, I[0..10], J[0..10], k]
 			E = eye(24);
-			% unit vectors:
+			% unit vectors (relative positions of the referred variables
+			% in the vectorized unified decision variable):
 			obj.j = E(1,:);
 			obj.i0 = E(2,:);
 			obj.I = E(3:12,:);
 			obj.j0 = E(13,:);
 			obj.J = E(14:23,:);
 			obj.k = E(24,:);
+			
+			% initializing the output variables
+			obj.total_charge = 0;
+			obj.total_power = 0;
+			obj.open_circuit_voltage = 0;
 		end
 		
 		% Updates the battery inner state considering
@@ -82,7 +88,7 @@ classdef Battery
 			KC_y = [i; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0];
 
 			% kirchoff's voltage law
-			KV = [-obj.R0*j + dt/obj.C0*obj.j0;
+			KV = [-obj.R0*obj.j + dt/obj.C0*obj.j0;
 				  -dt/obj.C0*obj.j0 + obj.R(1)*obj.I(1,:) + dt/obj.C(1)*obj.J(1,:);
 				  -dt/obj.C(1)*obj.J(1,:) + obj.R(2)*obj.I(2,:) + dt/obj.C(2)*obj.J(2,:);
 				  -dt/obj.C(2)*obj.J(2,:) + obj.R(3)*obj.I(3,:) + dt/obj.C(3)*obj.J(3,:);
@@ -93,7 +99,7 @@ classdef Battery
 				  -dt/obj.C(7)*obj.J(7,:) + obj.R(8)*obj.I(8,:) + dt/obj.C(8)*obj.J(8,:);
 				  -dt/obj.C(8)*obj.J(8,:) + obj.R(9)*obj.I(9,:) + dt/obj.C(9)*obj.J(9,:);
 				  -dt/obj.C(9)*obj.J(9,:) + obj.R(10)*obj.I(10,:) + dt/obj.C(10)*obj.J(10,:);
-				  -dt/obj.C(10)*obj.J(10,:) + obj.R(11)*k + dt/obj.C(11)*obj.k];
+				  -dt/obj.C(10)*obj.J(10,:) + obj.R(11)*obj.k + dt/obj.C(11)*obj.k];
 
 			KV_y = [-obj.Q0/obj.C0;
 					obj.Q0/obj.C0 - obj.Q(1)/obj.C(1);
@@ -113,12 +119,12 @@ classdef Battery
 
 			% values of the currents
 			currents = K\y;
-			j_ = currents(j==1);
-			i0_ = currents(i0==1); 
-			I_ = currents(sum(I)==1);
-			j0_ = currents(j0==1); 
-			J_ = currents(sum(J)==1);
-			k_ = currents(k==1);
+			j_ = currents(obj.j==1);
+			i0_ = currents(obj.i0==1); 
+			I_ = currents(sum(obj.I)==1);
+			j0_ = currents(obj.j0==1); 
+			J_ = currents(sum(obj.J)==1);
+			k_ = currents(obj.k==1);
 
 			% uptading the charges
 			obj.Q0 = obj.Q0 + dt*j0_;
@@ -128,6 +134,25 @@ classdef Battery
 			obj.total_charge = obj.Q0 + sum(obj.Q);
 			obj.total_power = obj.R0*j_^2 + sum(obj.R.*[I_;k_].^2) + sum((obj.Q0/obj.C0)*j0_) + sum((obj.Q./obj.C).*[J_;k_]);
 			obj.open_circuit_voltage = obj.Q0/obj.C0;
+		end
+		
+		function test(obj, i, dt, T)
+			V = zeros(T,1);
+			Q = zeros(T,1);
+			for t = 1 : T
+				disp(obj.open_circuit_voltage)
+				disp(V(t))
+				V(t) = obj.open_circuit_voltage;
+				Q(t) = obj.total_charge;
+				obj = obj.iterate(i, dt);
+			end
+			figure;
+			hold on;
+			plot((1:T)*dt, V);
+			plot((1:T)*dt, Q);
+			legend('Voltage (V)', 'Charge (C)');
+			xlabel('Time (s)');
+			title('Battery evolution');
 		end
 	end
 end

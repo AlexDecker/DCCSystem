@@ -2,11 +2,12 @@
 % produces realistic matrix samplings
 
 clear all;
+close all;
 clc;
 
 rng('shuffle')
 
-% sample size (increase this value if you want more instances)
+% sample size (increase this value if you want more instances, use 0 if you already have enough ones)
 sample_size = 0;%100;
 
 % number of coils
@@ -84,6 +85,7 @@ end
 P = corr(CONTROL,'type','spearman');
 figure;
 image(P,'CDataMapping','scaled');
+title('Control correlation');
 
 % removing outliers
 CONTROL_ALL_ = CONTROL_ALL(CONTROL_ALL<mean(CONTROL_ALL)+3*std(CONTROL_ALL));
@@ -97,21 +99,29 @@ scale = (params(1,2)+params(2,2))/2
 x = linspace(min(CONTROL_ALL_),max(CONTROL_ALL_),1000);
 figure;
 hold on;
-histogram(ALL_,50,'normalization','pdf')
+histogram(CONTROL_ALL_,50,'normalization','pdf')
 axis manual
 plot(x, gampdf(x,shape,scale));
+title('Control Distribution');
 
 % Generating a matrix sample using the proposed method
 EXPERIMENT = [];
 EXPERIMENT_ALL = [];
-for n = n_instances
 
+n = 0; % number of EXPERIMENT samples so far
+
+while n < n_instances
+	
+	% the number of devices must be n_coils to match the CONTROL sample
 	result.nt = randi(n_coils - 3) + 1;
 	result.nr = n_coils - result.nt;
+	
+	% arbitrary
 	result.timeLine_size = randi(10);
 	result.nSegments = 5+randi(15);
 	result.sample_size = 2+randi(10);
 
+	% arbitrary values for the lookup tables
 	result.deviceData = [];
 	for r = 1:result.nr
 		%random lookup tables for load resistance, current conversion and charge conversion
@@ -122,10 +132,12 @@ for n = n_instances
 
 	success=false;
 
+	disp('Generating a feasible N-Port Power Problem instance');
 	while ~success
 		[success, solution, result.chargeData, result.constraints, result.timeLine, result.dt] = generateFeasibleNPPPInstance(...
 			result.deviceData, result.nt, result.nSegments, result.timeLine_size, result.sample_size);
 	end
+	disp('DONE.');
 	
 	% for each time_slot
 	for t = 1:result.timeLine_size
@@ -138,10 +150,36 @@ for n = n_instances
 				m = [m, M(i,j)];
 			end
 		end
-		EXPERIMENT = [EXPERIMENT; m];
-		EXPERIMENT_ALL = [EXPERIMENT_ALL; m.'];
+		if n < n_instances
+			EXPERIMENT = [EXPERIMENT; m];
+			EXPERIMENT_ALL = [EXPERIMENT_ALL; m.'];
+			n = n + 1;
+		else
+			break;
+		end
 	end
 end
+
+% pearson correlation matrix
+P = corr(EXPERIMENT,'type','spearman');
+figure;
+image(P,'CDataMapping','scaled');
+title('Experiment correlation');
+
+% fitting in a gamma distribution
+%[~,params] = gamfit(EXPERIMENT_ALL);
+%shape = (params(1,1)+params(2,1))/2
+%scale = (params(1,2)+params(2,2))/2
+
+% by symmetry, all variables are identically distributed
+x = linspace(min(EXPERIMENT_ALL),max(EXPERIMENT_ALL),1000);
+figure;
+hold on;
+histogram(EXPERIMENT_ALL,50,'normalization','pdf')
+axis manual
+%plot(x, gampdf(x,shape,scale));
+title('Experiment Distribution');
+
 % Testando se possuem a mesma distribuição (ks multivariada?)
 
 % Se não for da mesma distribuição, que tal selecionar uma sub-amostra usando
