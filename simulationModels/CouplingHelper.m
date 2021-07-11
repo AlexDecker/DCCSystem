@@ -156,6 +156,22 @@ classdef CouplingHelper
 	end
 	
 	methods(Static)
+		% Based on 
+		%@article{mohan1999simple,
+		%  title={Simple accurate expressions for planar spiral inductances},
+		%  author={Mohan, Sunderarajan S and del Mar Hershenson, Maria and Boyd, Stephen P and Lee, Thomas H},
+		%  journal={IEEE Journal of solid-state circuits},
+		%  volume={34},
+		%  number={10},
+		%  pages={1419--1424},
+		%  year={1999},
+		%  publisher={IEEE}
+		%}
+		% Generates the self inductance of the reference coil (Planar winding) in Henrys
+		function L = referenceSelfInductance()
+			L = 0; %TODO
+		end
+	
 		% Creating inductance matrices using the Neumann integral (more reliable)
 		function neumannSampling()
 			rng('shuffle')
