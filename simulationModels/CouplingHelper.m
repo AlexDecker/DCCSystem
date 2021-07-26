@@ -143,8 +143,8 @@ classdef CouplingHelper
 			sample = obj.generateMutualInduction(iid_elements);
 			
 			k = 1;
-			for i = 1 : length(sample)
-				for j = i+1 : length(sample)
+			for i = 1 : obj.n_coils
+				for j = i+1 : obj.n_coils
 					M(i,j) = sample(k);
 					M(j,i) = sample(k);
 					k = k + 1;
@@ -153,6 +153,16 @@ classdef CouplingHelper
 			
 		end
 		
+	end
+	
+	properties(Constant)
+		% coil dimensions (we admit only homogeneous systems)
+		R2 = 0.15; % external radius
+		R1 = 0.05;% internal radius
+		N = 25; % number of turns
+		pts = 750; % coil resolution
+		mi = 4*pi*10e-7; % vacuum magnectic permeability
+		wire_radius = 0.002;
 	end
 	
 	methods(Static)
@@ -169,7 +179,17 @@ classdef CouplingHelper
 		%}
 		% Generates the self inductance of the reference coil (Planar winding) in Henrys
 		function L = referenceSelfInductance()
-			L = 0; %TODO
+			% average ratio
+			davg = (CouplingHelper.R2 + CouplingHelper.R1);
+			% fill ratio
+			p = (CouplingHelper.R2 - CouplingHelper.R1) / (CouplingHelper.R2 + CouplingHelper.R1);
+			% Coefficients for Current Sheet Expression (circular coil)
+			c1 = 1.00;
+			c2 = 2.46;
+			c3 = 0.00;
+			c4 = 0.20;
+			% less than 8% error for s < 3w:
+			L = 0.5 * CouplingHelper.mi * CouplingHelper.N^2 * davg * c1 * (log(c2/p) + c3*p + c4*p^2);
 		end
 	
 		% Creating inductance matrices using the Neumann integral (more reliable)
@@ -182,13 +202,11 @@ classdef CouplingHelper
 			% number of coils
 			n_coils = 6;
 
-			% coil dimensions (we admit only homogeneous systems)
-			R2 = 0.15; % external radius
-			R1 = 0.05;% internal radius
-			N = 25; % number of turns
-			pts = 750; % coil resolution
-			wire_radius = 0.001;
-			prototype = SpiralPlanarCoil(R2,R1,N,wire_radius,pts);
+			prototype = SpiralPlanarCoil(...
+				CouplingHelper.R2,CouplingHelper.R1,...
+				CouplingHelper.N,CouplingHelper.wire_radius,...
+				CouplingHelper.pts...
+			);
 
 			% simulation area restricted to a 1 m origin-centered cube
 			maxV = 0.5;
@@ -210,7 +228,7 @@ classdef CouplingHelper
 				
 				% creating an environment (encapsulates the impedance matrix and calculates
 				% the couplings. Using vacuum magnetic permeability and a dummie frequency
-				environment = Environment(group_list,1e+6,pi*4e-7);
+				environment = Environment(group_list, 1e+6, CouplingHelper.mi);
 				
 				if check(environment)
 					% calculate the mutual inductance matriz with no previous information

@@ -1,5 +1,6 @@
 classdef WPTSystem
 	properties
+		name
 		nt % number of transmitters
 		nr % number of receivers
 		padding % proportion of circuit-area padding (0-1)
@@ -26,7 +27,7 @@ classdef WPTSystem
 	
 	% setup methods
 	methods
-		function obj = WPTSystem(nt, nr, top_rect)
+		function obj = WPTSystem(name, nt, nr, top_rect)
 			% local setup
 			obj.coupling_helper = CouplingHelper([], false);
 			obj.nt = nt;
@@ -39,13 +40,14 @@ classdef WPTSystem
 			end
 			
 			% environment setup
-			new_system('wpt_system');
-			open_system('wpt_system');
+			obj.name = name;
+			new_system(name);
+			open_system(name);
 			
 			% topological hierarchy
 			if isempty(top_rect) || top_rect(1) <= top_rect(3) || top_rect(2) <= top_rect(4)
 				disp('Using default area information...');
-				top_rect = [0, 0, 100 * max(nt, nr), 1000];
+				top_rect = [0, 0, 500, 125 * max(nt, nr)];
 			end
 			
 			% block containers setup
@@ -86,7 +88,8 @@ classdef WPTSystem
 		end
 		
 		function [hierarchy, obj] = setupCouplingAbstraction(obj, hierarchy)
-			
+			hierarchy = obj.addPadding(hierarchy);
+			obj = obj.newCoupledInductors(hierarchy.children{1});
 		end
 		
 		function [hierarchy, obj] = setupRXSide(obj, hierarchy)
@@ -118,9 +121,9 @@ classdef WPTSystem
 			
 		end
 				
-		function obj = destroy(obj)
+		function destroy(obj)
 			% close inconditionally
-			bdclose('wpt_system');
+			bdclose(obj.name);
 		end
 	end
 	
@@ -130,7 +133,7 @@ classdef WPTSystem
 		
 			obj.sources.count = obj.sources.count + 1;
 			
-			element.name = ['wpt_system/src_', num2str(obj.sources.count)];
+			element.name = [obj.name,'/src_', num2str(obj.sources.count)];
 			
 			add_block('powerlib/Electrical Sources/AC Voltage Source',...
 				element.name,...
@@ -149,7 +152,7 @@ classdef WPTSystem
 
 			obj.tx_rlc_branches.count = obj.tx_rlc_branches.count + 1;
 		
-			element.name = ['wpt_system/tx_rlc_', obj.tx_rlc_branches.count];
+			element.name = [obj.name,'/tx_rlc_', num2str(obj.tx_rlc_branches.count)];
 
 			add_block('powerlib/Elements/Series RLC Branch',...
 				element.name,...
@@ -168,7 +171,7 @@ classdef WPTSystem
 		% https://www.mathworks.com/help/physmod/sps/powersys/ref/mutualinductance.html
 		function obj = newCoupledInductors(obj, hierarchy)
 
-			element.name = ['wpt_system/coupler'];
+			element.name = [obj.name,'/coupler'];
 
 			add_block('powerlib/Elements/Mutual Inductance',...
 				element.name, ...
@@ -176,15 +179,15 @@ classdef WPTSystem
 			);
 			
 			set_param(element.name, 'TypeOfMutual', 'Generalized mutual inductance');
-			set_param(element.name, 'NumberOfWindings', obj.nt + obj.nr);
-			
-			% first set of internal parameters
-			obj = obj.changeCouplings();
+			set_param(element.name, 'NumberOfWindings', num2str(obj.nt + obj.nr));
 			
 			% for later connection of blocks
 			element.hnd = get_param(element.name,'PortHandles');
 			
 			obj.mutual_coupler = element;
+			
+			% first set of internal parameters
+			obj = obj.changeCouplings();
 		end
 		
 		% Chargeable battery which supplies the powered device. 
@@ -227,39 +230,40 @@ classdef WPTSystem
 		function obj = changeCouplings(obj)
 			
 			% the mutual induction in a simulated homogeneous system of windings
-			M = obj.CouplingHelper.generateMutualInductionMatrix();
+			M = 4*pi*1e-6 * obj.coupling_helper.generateMutualInductionMatrix()
 			
 			% the self-induction of each coil
-			L = obj.CouplingHelper.referenceSelfInductance();
+			L = CouplingHelper.referenceSelfInductance();
 			
 			% the complete inductance matrix
 			inductances = -M + L * eye(obj.nt + obj.nr);
 			
 			% setting up the ideal inductors
-			set_param(obj.coupler.name, 'InductanceMatrix', mat2str(M));
-			set_param(obj.coupler.name, 'ResistanceMatrix', mat2str(zeros(obj.nt + obj.nr)));
+			set_param(obj.mutual_coupler.name, 'InductanceMatrix', mat2str(inductances));
+			set_param(obj.mutual_coupler.name, 'ResistanceMatrix', mat2str(zeros(obj.nt + obj.nr)));
 			
 			% achieving resonance using the capacitive reactance
 			C = 1 / ( ( 2 * pi * obj.operating_frequency )^2 * L );
-			for i = 1 : length(obj.tx_rlc)
-				set_param(obj.tx_rlc{i}.name, 'Capacitance', num2str(C));
+			for i = 1 : obj.tx_rlc_branches.count
+				set_param(obj.tx_rlc_branches.elements{i}.name, 'Capacitance', num2str(C));
 			end
-			for i = 1 : length(obj.rx_rlc)
-				set_param(obj.rx_rlc{i}.name, 'Capacitance', num2str(C));
+			for i = 1 : obj.rx_rlc_branches.count
+				disp('jfiwjfw');
+				set_param(obj.rx_rlc_branches.elements{i}.name, 'Capacitance', num2str(C));
 			end
 		end
 		
 		function obj = setResistances(obj, resistance_vector)
-			if length(resistance_vector) ~= obj.nt + obj.nr
+			if length(resistance_vector) ~= obj.tx_rlc_branches.count + obj.rx_rlc_branches.count
 				error('Inconsistent resistance vector');
 			end
 			
-			for i = 1 : obj.nt
-				set_param(obj.tx_rlc{i}.name, 'Resistance', num2str(R(i)));
+			for i = 1 : obj.tx_rlc_branches.count
+				set_param(obj.tx_rlc_branches.elements{i}.name, 'Resistance', num2str(R(i)));
 			end
 			
-			for i = 1 : obj.nr
-				set_param(obj.rx_rlc{i}.name, 'Resistance', num2str(R(obj.nt + i)));
+			for i = 1 : obj.rx_rlc_branches.count
+				set_param(obj.rx_rlc_branches.elements{i}.name, 'Resistance', num2str(R(obj.nt + i)));
 			end
 		end
 	end
@@ -269,15 +273,25 @@ classdef WPTSystem
 		function obj = connectTXComponents(obj)
 			for i = 1 : obj.sources.count
 				% connecting the source to the rlc
-				add_line('wpt_system',...
+				add_line(obj.name,...
 					obj.sources.elements{i}.hnd.LConn,...
 					obj.tx_rlc_branches.elements{i}.hnd.LConn,...
 					'Autorouting', 'on'...
 				);
 				
 				% connecting the source to the coil
+				add_line(obj.name,...
+					obj.sources.elements{i}.hnd.RConn,...
+					obj.mutual_coupler.hnd.RConn(i),...
+					'Autorouting', 'on'...
+				);
 				
 				% connecting the coil to the rlc
+				add_line(obj.name,...
+					obj.tx_rlc_branches.elements{i}.hnd.RConn,...
+					obj.mutual_coupler.hnd.LConn(i),...
+					'Autorouting', 'on'...
+				);
 			end
 		end
 		
@@ -310,10 +324,10 @@ classdef WPTSystem
 			end
 			
 			% top walking dimension
-			w = hierarchy.rect(4) - hierarchy.rect(2);
+			w = hierarchy.rect(3) - hierarchy.rect(1);
 			
 			% horizontal cut point
-			w_start = hierarchy.rect(2);
+			w_start = hierarchy.rect(1);
 			
 			for i = 1 : length(distribution)
 				
@@ -321,7 +335,7 @@ classdef WPTSystem
 				w_end = w_start + distribution(i) * w;
 				
 				% sub-area
-				child.rect = [hierarchy.rect(1), w_start, hierarchy.rect(3), w_end];
+				child.rect = [w_start, hierarchy.rect(2), w_end, hierarchy.rect(4)];
 				child.children = cell(0);
 				
 				hierarchy.children{end + 1} = child;
@@ -337,10 +351,10 @@ classdef WPTSystem
 			end
 			
 			% top walking dimension
-			h = hierarchy.rect(3) - hierarchy.rect(1);
+			h = hierarchy.rect(4) - hierarchy.rect(2);
 			
 			% vertical cut point
-			h_start = hierarchy.rect(1);
+			h_start = hierarchy.rect(2);
 			
 			for i = 1 : length(distribution)
 				
@@ -348,7 +362,7 @@ classdef WPTSystem
 				h_end = h_start + distribution(i) * h;
 				
 				% sub-area
-				child.rect = [h_start, hierarchy.rect(2), h_end, hierarchy.rect(4)];
+				child.rect = [hierarchy.rect(1), h_start, hierarchy.rect(3), h_end];
 				child.children = cell(0); % no children so far
 				
 				% new child-area
