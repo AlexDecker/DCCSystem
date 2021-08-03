@@ -14,8 +14,8 @@ classdef WPTSystem
 		
 		% rx-side components
 		rx_rlc_branches
-		diodes
 		acdc_converters
+		consumers
 		batteries
 		
 		% coupling model
@@ -51,12 +51,25 @@ classdef WPTSystem
 			end
 			
 			% block containers setup
-			obj.sources.count = 0; obj.sources.elements = cell(obj.nt,1);
-			obj.tx_rlc_branches.count = 0; obj.tx_rlc_branches.elements = cell(obj.nt,1);
-			obj.rx_rlc_branches.count = 0; obj.rx_rlc_branches.elements = cell(obj.nr,1);
-			obj.diodes.count = 0; obj.diodes.elements = cell(obj.nr,1);
-			obj.acdc_converters.count = 0; obj.acdc_converters.elements = cell(obj.nr,1);
-			obj.batteries.count = 0; obj.batteries.elements = cell(obj.nr,1);
+			obj.sources.count = 0;
+			obj.sources.elements = cell(obj.nt,1);
+			
+			obj.tx_rlc_branches.count = 0;
+			obj.tx_rlc_branches.elements = cell(obj.nt,1);
+			
+			obj.rx_rlc_branches.count = 0;
+			obj.rx_rlc_branches.elements = cell(obj.nr,1);
+			
+			obj.acdc_converters.count = 0;
+			obj.acdc_converters.bridges = cell(obj.nr,1);
+			obj.acdc_converters.filters = cell(obj.nr,1);
+			obj.acdc_converters.diodes = cell(obj.nr,1);
+			
+			obj.consumers.count = 0;
+			obj.consumers.elements = cell(obj.nr,1);
+			
+			obj.batteries.count = 0;
+			obj.batteries.elements = cell(obj.nr,1);
 			
 			obj.hierarchy.rect = top_rect;
 			obj.hierarchy.children = cell(0);
@@ -70,7 +83,6 @@ classdef WPTSystem
 			% add all connections
 			obj = obj.connectTXComponents()
 			obj = obj.connectRXComponents()
-			obj = obj.connectCoupler()
 		end
 		
 		function [hierarchy, obj] = setupTXSide(obj, hierarchy)
@@ -114,10 +126,22 @@ classdef WPTSystem
 			obj = obj.newSource(hierarchy.children{1}.children{2});
 			
 			hierarchy.children{2} = obj.verticalCut(hierarchy.children{2}, [0.6, 0.4]);
-			obj = obj.newRC(hierarchy.children{2}.children{2});
+			obj = obj.newRC(true, hierarchy.children{2}.children{2});
+			
 		end
 		
 		function [hierarchy, obj] = buildRXCircuit(obj, hierarchy)
+			% Panels: rc, acdc converter, consumer, battery
+			hierarchy = obj.horizontalCut(hierarchy, [0.25,0.5,0.05,0.2]);
+			
+			for i = 1 : length(hierarchy.children)
+				hierarchy.children{i} = obj.addPadding(hierarchy.children{i});
+			end
+			
+			obj = obj.newRC(false, hierarchy.children{1});
+			[hierarchy, obj] = obj.newACDCConverter(hierarchy.children{2}.children{1});
+			obj = obj.newPoweredDevice(hierarchy.children{3}.children{1});
+			obj = obj.newBattery(0, hierarchy.children{4}.children{1});
 			
 		end
 				
@@ -148,11 +172,17 @@ classdef WPTSystem
 		end
 		
 		% used in both TX and RX (one for each circuit)
-		function obj = newRC(obj, hierarchy)
+		function obj = newRC(obj, isTX, hierarchy)
 
-			obj.tx_rlc_branches.count = obj.tx_rlc_branches.count + 1;
-		
-			element.name = [obj.name,'/tx_rlc_', num2str(obj.tx_rlc_branches.count)];
+			if isTX
+				obj.tx_rlc_branches.count = obj.tx_rlc_branches.count + 1;
+				count = obj.tx_rlc_branches.count;
+				element.name = [obj.name,'/tx_rlc_', num2str(count)];
+			else
+				obj.rx_rlc_branches.count = obj.rx_rlc_branches.count + 1;
+				count = obj.rx_rlc_branches.count;
+				element.name = [obj.name,'/rx_rlc_', num2str(count)];
+			end
 
 			add_block('powerlib/Elements/Series RLC Branch',...
 				element.name,...
@@ -164,7 +194,11 @@ classdef WPTSystem
 			% for later connection of blocks
 			element.hnd = get_param(element.name,'PortHandles');
 			
-			obj.tx_rlc_branches.elements{obj.tx_rlc_branches.count} = element;
+			if isTX
+				obj.tx_rlc_branches.elements{count} = element;
+			else
+				obj.rx_rlc_branches.elements{count} = element;
+			end
 			
 		end
 		
@@ -191,15 +225,101 @@ classdef WPTSystem
 		end
 		
 		% Chargeable battery which supplies the powered device. 
-		function obj = newBattery(obj, hierarchy)
+		function obj = newBattery(obj, SOC, hierarchy)
+			
+			if SOC < 0 || SOC > 100
+				error('Invalid state-of-charge.');
+			end
+			
+			obj.batteries.count = obj.batteries.count + 1;
+			
+			element.name = [obj.name,'/bat_', num2str(obj.batteries.count)];
+			
+			add_block('electricdrivelib/Extra Sources/Battery',...
+				element.name, ...
+				'Position', hierarchy.rect ...
+			);
+			
+			set_param(element.name, 'Orientation', 'right');
+			set_param(element.name, 'SOC', num2str(SOC));
+			
+			% LConn [1..2]
+			element.hnd = get_param(element.name,'PortHandles');
+			
+			obj.batteries{obj.batteries.count} = element;
 		end
 		
 		% Provides interface between the rx rlc ring and the DC internal circuit
-		function obj = newACDCConverter(obj, hierarchy)
-		end
+		function [hierarchy, obj] = newACDCConverter(obj, hierarchy)
+			
+			% 3 panels: one for the bridge, the second one for the filter capacitor
+			% and the third one for the isolation diode (here implemented using another
+			% bridge)
+			hierarchy = obj.horizontalCut(hierarchy, [0.35, 0.3, 0.35]);
+			hierarchy.children{1} = obj.addPadding(hierarchy.children{1});
+			hierarchy.children{2} = obj.addPadding(hierarchy.children{2});
+			hierarchy.children{3} = obj.addPadding(hierarchy.children{3});
 		
-		% Avoids the battery power to interfere in the rlc behavior.
-		function obj = newDiode(obj, hierarchy)
+			obj.acdc_converters.count = obj.acdc_converters.count + 1;
+			
+			bridge.name = [obj.name,'/bridge_', num2str(obj.acdc_converters.count)];
+			filter.name = [obj.name,'/filter_', num2str(obj.acdc_converters.count)];
+			diode.name = [obj.name,'/diode_', num2str(obj.acdc_converters.count)];
+			
+			add_block('powerlib/Power Electronics/Universal Bridge',...
+				bridge.name, ...
+				'Position', hierarchy.children{1}.children{1}.rect ...
+			);
+			add_block('powerlib/Elements/Series RLC Branch',...
+				filter.name ...
+			);
+			add_block('powerlib/Power Electronics/Universal Bridge',...
+				diode.name, ...
+				'Position', hierarchy.children{3}.children{1}.rect ...
+			);
+			
+			set_param(bridge.name, 'Arms', '2');
+			set_param(bridge.name, 'Device', 'Diodes');
+			
+			set_param(filter.name, 'BranchType', 'C');
+			set_param(filter.name, 'Capacitance', '0.1'); % Farad
+			set_param(filter.name, 'Orientation', 'down');
+			set_param(bridge.name, 'Position', hierarchy.children{2}.children{1}.rect);
+			
+			set_param(diode.name, 'Arms', '2');
+			set_param(diode.name, 'Device', 'Diodes');
+			
+			% LConn[1..2], RConn[1..2]
+			bridge.hnd = get_param(bridge.name,'PortHandles');
+			diode.hnd = get_param(diode.name,'PortHandles');
+			% LConn (+), RConn (-)
+			filter.hnd = get_param(filter.name,'PortHandles');
+			
+			% internal connections
+			add_line(obj.name,...
+				bridge.hnd.RConn(1),...
+				filter.hnd.LConn,...
+				'Autorouting', 'on'...
+			);
+			add_line(obj.name,...
+				bridge.hnd.RConn(2),...
+				filter.hnd.RConn,...
+				'Autorouting', 'on'...
+			);
+			add_line(obj.name,...
+				filter.hnd.LConn,...
+				diode.hnd.LConn(1),...
+				'Autorouting', 'on'...
+			);
+			add_line(obj.name,...
+				filter.hnd.RConn,...
+				diode.hnd.LConn(2),...
+				'Autorouting', 'on'...
+			);
+			
+			obj.acdc_converters.bridges{obj.acdc_converters.count} = bridge;
+			obj.acdc_converters.filters{obj.acdc_converters.count} = filter;
+			obj.acdc_converters.diodes{obj.acdc_converters.count} = diode;
 		end
 		
 		% For consistency sake between TX and RX readings.
@@ -207,6 +327,22 @@ classdef WPTSystem
 		end
 		
 		function obj = newPoweredDevice(obj, hierarchy)
+			obj.consumers.count = obj.consumers.count + 1;
+		
+			element.name = [obj.name,'/consumer_', num2str(obj.consumers.count)];
+
+			add_block('powerlib/Elements/Series RLC Branch',...
+				element.name,...
+				'Position', hierarchy.rect ...
+			);
+			
+			set_param(element.name, 'BranchType', 'R');
+			set_param(element.name, 'Resistance', num2str(1000)); %ohms
+			
+			% for later connection of blocks
+			element.hnd = get_param(element.name,'PortHandles');
+			
+			obj.consumers.elements{obj.consumers.count} = element;
 		end
 	end
 	
@@ -248,7 +384,6 @@ classdef WPTSystem
 				set_param(obj.tx_rlc_branches.elements{i}.name, 'Capacitance', num2str(C));
 			end
 			for i = 1 : obj.rx_rlc_branches.count
-				disp('jfiwjfw');
 				set_param(obj.rx_rlc_branches.elements{i}.name, 'Capacitance', num2str(C));
 			end
 		end
@@ -306,22 +441,17 @@ classdef WPTSystem
 			% connecting the battery to the device
 			% connecting the device to the ground
 		end
-		
-		function obj = connectCoupler(obj)
-			% connecting the tx rlc to the coil
-			% connecting the coil to the source
-			% connecting the rx rlc to the coil
-			% connecting the coil to the source
-		end
 	end
 	
 	% hierarchical division of the circuit area
 	methods
 		function hierarchy = horizontalCut(obj, hierarchy, distribution)
 			
-			if sum(distribution) ~= 1 || ~isempty(hierarchy.children)
+			if sum(distribution) <= 0 || ~isempty(hierarchy.children)
 				error('Invalid cut');
 			end
+			
+			distribution = distribution / sum(distribution);
 			
 			% top walking dimension
 			w = hierarchy.rect(3) - hierarchy.rect(1);
@@ -346,9 +476,11 @@ classdef WPTSystem
 		
 		function hierarchy = verticalCut(obj, hierarchy, distribution)
 			
-			if sum(distribution) ~= 1 || ~isempty(hierarchy.children)
+			if sum(distribution) <= 0 || ~isempty(hierarchy.children)
 				error('Invalid cut');
 			end
+			
+			distribution = distribution / sum(distribution);
 			
 			% top walking dimension
 			h = hierarchy.rect(4) - hierarchy.rect(2);
