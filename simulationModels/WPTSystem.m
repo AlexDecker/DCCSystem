@@ -47,7 +47,7 @@ classdef WPTSystem
 			% topological hierarchy
 			if isempty(top_rect) || top_rect(1) <= top_rect(3) || top_rect(2) <= top_rect(4)
 				disp('Using default area information...');
-				top_rect = [0, 0, 500, 125 * max(nt, nr)];
+				top_rect = [0, 0, 1000, 175 * max(nt, nr)];
 			end
 			
 			% block containers setup
@@ -75,7 +75,7 @@ classdef WPTSystem
 			obj.hierarchy.children = cell(0);
 			
 			% dividing the area between tx, coupling, and rx panels
-			obj.hierarchy = obj.horizontalCut(obj.hierarchy, [0.3, 0.2, 0.5]);
+			obj.hierarchy = obj.horizontalCut(obj.hierarchy, [0.15, 0.05, 0.8]);
 			[obj.hierarchy.children{1}, obj] = obj.setupTXSide(obj.hierarchy.children{1});
 			[obj.hierarchy.children{2}, obj] = obj.setupCouplingAbstraction(obj.hierarchy.children{2});
 			[obj.hierarchy.children{3}, obj] = obj.setupRXSide(obj.hierarchy.children{3});
@@ -132,15 +132,20 @@ classdef WPTSystem
 		
 		function [hierarchy, obj] = buildRXCircuit(obj, hierarchy)
 			% Panels: rc, acdc converter, consumer, battery
-			hierarchy = obj.horizontalCut(hierarchy, [0.25,0.5,0.05,0.2]);
+			hierarchy = obj.horizontalCut(hierarchy, [0.1,0.65,0.05,0.2]);
 			
 			for i = 1 : length(hierarchy.children)
 				hierarchy.children{i} = obj.addPadding(hierarchy.children{i});
 			end
 			
-			obj = obj.newRC(false, hierarchy.children{1});
-			[hierarchy, obj] = obj.newACDCConverter(hierarchy.children{2}.children{1});
-			obj = obj.newPoweredDevice(hierarchy.children{3}.children{1});
+			hierarchy.children{1}.children{1} = obj.verticalCut(hierarchy.children{1}.children{1}, [0.8, 0.2]);
+			obj = obj.newRC(false, hierarchy.children{1}.children{1}.children{2});
+			
+			[hierarchy.children{2}.children{1}, obj] = obj.newACDCConverter(hierarchy.children{2}.children{1});
+			
+			hierarchy.children{3}.children{1} = obj.verticalCut(hierarchy.children{3}.children{1}, [0.4, 0.2, 0.4]);
+			obj = obj.newPoweredDevice(hierarchy.children{3}.children{1}.children{2});
+			
 			obj = obj.newBattery(0, hierarchy.children{4}.children{1});
 			
 		end
@@ -246,7 +251,7 @@ classdef WPTSystem
 			% LConn [1..2]
 			element.hnd = get_param(element.name,'PortHandles');
 			
-			obj.batteries{obj.batteries.count} = element;
+			obj.batteries.elements{obj.batteries.count} = element;
 		end
 		
 		% Provides interface between the rx rlc ring and the DC internal circuit
@@ -255,7 +260,7 @@ classdef WPTSystem
 			% 3 panels: one for the bridge, the second one for the filter capacitor
 			% and the third one for the isolation diode (here implemented using another
 			% bridge)
-			hierarchy = obj.horizontalCut(hierarchy, [0.35, 0.3, 0.35]);
+			hierarchy = obj.horizontalCut(hierarchy, [0.4, 0.2, 0.4]);
 			hierarchy.children{1} = obj.addPadding(hierarchy.children{1});
 			hierarchy.children{2} = obj.addPadding(hierarchy.children{2});
 			hierarchy.children{3} = obj.addPadding(hierarchy.children{3});
@@ -270,8 +275,10 @@ classdef WPTSystem
 				bridge.name, ...
 				'Position', hierarchy.children{1}.children{1}.rect ...
 			);
+			hierarchy.children{2}.children{1} = obj.verticalCut(hierarchy.children{2}.children{1}, [0.4,0.2,0.4]);
 			add_block('powerlib/Elements/Series RLC Branch',...
-				filter.name ...
+				filter.name, ...
+				'Position', hierarchy.children{2}.children{1}.children{2}.rect ...
 			);
 			add_block('powerlib/Power Electronics/Universal Bridge',...
 				diode.name, ...
@@ -284,7 +291,6 @@ classdef WPTSystem
 			set_param(filter.name, 'BranchType', 'C');
 			set_param(filter.name, 'Capacitance', '0.1'); % Farad
 			set_param(filter.name, 'Orientation', 'down');
-			set_param(bridge.name, 'Position', hierarchy.children{2}.children{1}.rect);
 			
 			set_param(diode.name, 'Arms', '2');
 			set_param(diode.name, 'Device', 'Diodes');
@@ -338,6 +344,7 @@ classdef WPTSystem
 			
 			set_param(element.name, 'BranchType', 'R');
 			set_param(element.name, 'Resistance', num2str(1000)); %ohms
+			set_param(element.name, 'Orientation', 'down');
 			
 			% for later connection of blocks
 			element.hnd = get_param(element.name,'PortHandles');
@@ -366,7 +373,7 @@ classdef WPTSystem
 		function obj = changeCouplings(obj)
 			
 			% the mutual induction in a simulated homogeneous system of windings
-			M = 4*pi*1e-6 * obj.coupling_helper.generateMutualInductionMatrix()
+			M = 4*pi*1e-6 * obj.coupling_helper.generateMutualInductionMatrix();
 			
 			% the self-induction of each coil
 			L = CouplingHelper.referenceSelfInductance();
@@ -431,15 +438,9 @@ classdef WPTSystem
 		end
 		
 		function obj = connectRXComponents(obj)
-			% connecting the coil to the rlc
-			% connecting the rlc to the ground
-			% connecting the coil to the ACDC converter
-			% connecting the ACDC converter to the diode
-			% connecting the ACDC converter to the ground
-			% connecting the diode to the battery
-			% connecting the battery to the ground
-			% connecting the battery to the device
-			% connecting the device to the ground
+			for i = 1 : obj.sources.count
+				
+			end
 		end
 	end
 	
