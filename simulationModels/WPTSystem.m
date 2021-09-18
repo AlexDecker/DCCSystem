@@ -3,7 +3,6 @@ classdef WPTSystem
 		name
 		nt % number of transmitters
 		nr % number of receivers
-		padding % proportion of circuit-area padding (0-1)
 		
 		% topological distribution of the area
 		hierarchy
@@ -28,15 +27,15 @@ classdef WPTSystem
 	% setup methods
 	methods
 		function obj = WPTSystem(name, nt, nr, top_rect)
-			% local setup
+		
+			% local setup (get all coupling references in the pwd)
 			obj.coupling_helper = CouplingHelper([], false);
 			obj.nt = nt;
 			obj.nr = nr;
-			obj.padding = 0.1; % 10%
 			obj.operating_frequency = 1e+6; % 1 MHz
 			
-			if obj.coupling_helper.n_coils ~= obj.nt + obj.nr
-				error(['nt and nr sum must be equal to ', num2str(obj.coupling_helper.n_coils)]);
+			if obj.nt < 1 || obj.nr < 1
+				error('nt and nr sum must be at least 1.');
 			end
 			
 			% environment setup
@@ -44,10 +43,18 @@ classdef WPTSystem
 			new_system(name);
 			open_system(name);
 			
+			% solver definitions: default
+			add_block('powerlib/powergui',[name, '/powergui']);
+			%set_param([name, '/powergui'],'SimulationMode','Continuous');
+			set_param([name, '/powergui'],'SimulationMode','Discrete');
+			%set_param([name, '/powergui'],'SimulationMode','Phasor');
+			set_param([name, '/powergui'],'SampleTime','1e-6');
+			set_param('wpt', 'MaxStep', '1');
+			
 			% topological hierarchy
 			if isempty(top_rect) || top_rect(1) <= top_rect(3) || top_rect(2) <= top_rect(4)
 				disp('Using default area information...');
-				top_rect = [0, 0, 1000, 175 * max(nt, nr)];
+				top_rect = [0, 0, 1200, 300 * max(nt, nr)];
 			end
 			
 			% block containers setup
@@ -55,10 +62,14 @@ classdef WPTSystem
 			obj.sources.elements = cell(obj.nt,1);
 			
 			obj.tx_rlc_branches.count = 0;
-			obj.tx_rlc_branches.elements = cell(obj.nt,1);
+			obj.tx_rlc_branches.components = cell(obj.nt,1);
+			obj.tx_rlc_branches.voltmeters = cell(obj.nt,1);
+			obj.tx_rlc_branches.acquisitions = cell(obj.nt,1);
 			
 			obj.rx_rlc_branches.count = 0;
-			obj.rx_rlc_branches.elements = cell(obj.nr,1);
+			obj.rx_rlc_branches.components = cell(obj.nr,1);
+			obj.rx_rlc_branches.voltmeters = cell(obj.nr,1);
+			obj.rx_rlc_branches.acquisitions = cell(obj.nr,1);
 			
 			obj.acdc_converters.count = 0;
 			obj.acdc_converters.bridges = cell(obj.nr,1);
@@ -69,20 +80,21 @@ classdef WPTSystem
 			obj.consumers.elements = cell(obj.nr,1);
 			
 			obj.batteries.count = 0;
-			obj.batteries.elements = cell(obj.nr,1);
+			obj.batteries.components = cell(obj.nr,1);
+			obj.batteries.acquisitions = cell(obj.nr,1); % data acquisition
 			
 			obj.hierarchy.rect = top_rect;
 			obj.hierarchy.children = cell(0);
 			
 			% dividing the area between tx, coupling, and rx panels
-			obj.hierarchy = obj.horizontalCut(obj.hierarchy, [0.15, 0.05, 0.8]);
+			obj.hierarchy = obj.horizontalCut(obj.hierarchy, [0.14, 0.2, 0.66]);
 			[obj.hierarchy.children{1}, obj] = obj.setupTXSide(obj.hierarchy.children{1});
 			[obj.hierarchy.children{2}, obj] = obj.setupCouplingAbstraction(obj.hierarchy.children{2});
 			[obj.hierarchy.children{3}, obj] = obj.setupRXSide(obj.hierarchy.children{3});
 			
 			% add all connections
-			obj = obj.connectTXComponents()
-			obj = obj.connectRXComponents()
+			obj = obj.connectTXComponents();
+			obj = obj.connectRXComponents();
 		end
 		
 		function [hierarchy, obj] = setupTXSide(obj, hierarchy)
@@ -93,14 +105,14 @@ classdef WPTSystem
 			
 			% build each circuit
 			for i = 1 : length(hierarchy.children)
-				hierarchy.children{i} = obj.addPadding(hierarchy.children{i});
+				hierarchy.children{i} = obj.addPadding(hierarchy.children{i}, 0.1);
 				[hierarchy.children{i}.children{1}, obj] = obj.buildTXCircuit(hierarchy.children{i}.children{1});
 			end
 			
 		end
 		
 		function [hierarchy, obj] = setupCouplingAbstraction(obj, hierarchy)
-			hierarchy = obj.addPadding(hierarchy);
+			hierarchy = obj.addPadding(hierarchy, 0.6);
 			obj = obj.newCoupledInductors(hierarchy.children{1});
 		end
 		
@@ -112,7 +124,7 @@ classdef WPTSystem
 			
 			% build each circuit
 			for i = 1 : length(hierarchy.children)
-				hierarchy.children{i} = obj.addPadding(hierarchy.children{i});
+				hierarchy.children{i} = obj.addPadding(hierarchy.children{i}, 0.1);
 				[hierarchy.children{i}.children{1}, obj] = obj.buildRXCircuit(hierarchy.children{i}.children{1});
 			end
 			
@@ -120,33 +132,32 @@ classdef WPTSystem
 		
 		function [hierarchy, obj] = buildTXCircuit(obj, hierarchy)
 			
-			hierarchy = obj.horizontalCut(hierarchy, [0.25, 0.75]);
+			hierarchy = obj.verticalCut(hierarchy, [0.2, 0.23, 0.02, 0.37, 0.18]);
 			
-			hierarchy.children{1} = obj.verticalCut(hierarchy.children{1}, [0.2, 0.4, 0.4]);
-			obj = obj.newSource(hierarchy.children{1}.children{2});
+			hierarchy.children{2} = obj.horizontalCut(hierarchy.children{2}, [0.3, 0.7]);
+			obj = obj.newSource(hierarchy.children{2}.children{1});
 			
-			hierarchy.children{2} = obj.verticalCut(hierarchy.children{2}, [0.6, 0.4]);
-			obj = obj.newRC(true, hierarchy.children{2}.children{2});
+			hierarchy.children{4} = obj.horizontalCut(hierarchy.children{4}, [0.2, 0.8]);
+			[hierarchy.children{4}.children{2}, obj] = obj.newRC(true, hierarchy.children{4}.children{2});
 			
 		end
 		
 		function [hierarchy, obj] = buildRXCircuit(obj, hierarchy)
-			% Panels: rc, acdc converter, consumer, battery
-			hierarchy = obj.horizontalCut(hierarchy, [0.1,0.65,0.05,0.2]);
+			% 2 vertical spacers
+			hierarchy = obj.verticalCut(hierarchy, [0.16,0.61,0.23]);
 			
-			for i = 1 : length(hierarchy.children)
-				hierarchy.children{i} = obj.addPadding(hierarchy.children{i});
-			end
+			% Panels: rc, acdc converter, consumer, battery and 3 spacers
+			hierarchy.children{2} = obj.horizontalCut(hierarchy.children{2}, [0.17,0.04,0.37,0.04,0.03,0.04,0.32]);
 			
-			hierarchy.children{1}.children{1} = obj.verticalCut(hierarchy.children{1}.children{1}, [0.8, 0.2]);
-			obj = obj.newRC(false, hierarchy.children{1}.children{1}.children{2});
+			hierarchy.children{2}.children{1} = obj.verticalCut(hierarchy.children{2}.children{1}, [0.2, 0.65, 0.15]);
+			[hierarchy.children{2}.children{1}.children{2}, obj] = obj.newRC(false, hierarchy.children{2}.children{1}.children{2});
 			
-			[hierarchy.children{2}.children{1}, obj] = obj.newACDCConverter(hierarchy.children{2}.children{1});
+			[hierarchy.children{2}.children{3}, obj] = obj.newACDCConverter(hierarchy.children{2}.children{3});
 			
-			hierarchy.children{3}.children{1} = obj.verticalCut(hierarchy.children{3}.children{1}, [0.4, 0.2, 0.4]);
-			obj = obj.newPoweredDevice(hierarchy.children{3}.children{1}.children{2});
+			hierarchy.children{2}.children{5} = obj.verticalCut(hierarchy.children{2}.children{5}, [0.35,0.3,0.35]);
+			obj = obj.newPoweredDevice(hierarchy.children{2}.children{5}.children{2});
 			
-			obj = obj.newBattery(0, hierarchy.children{4}.children{1});
+			[hierarchy.children{2}.children{7}, obj] = obj.newBattery(0, hierarchy.children{2}.children{7});
 			
 		end
 				
@@ -177,32 +188,78 @@ classdef WPTSystem
 		end
 		
 		% used in both TX and RX (one for each circuit)
-		function obj = newRC(obj, isTX, hierarchy)
-
+		function [hierarchy, obj] = newRC(obj, isTX, hierarchy)
+			
+			hierarchy = obj.verticalCut(hierarchy, [0.16, 0.37, 0.47]);
+			hierarchy.children{1} = obj.horizontalCut(hierarchy.children{1}, [0.53, 0.47]);
+			hierarchy.children{3} = obj.horizontalCut(hierarchy.children{3}, [0.11, 0.32, 0.25, 0.32]);
+			
 			if isTX
 				obj.tx_rlc_branches.count = obj.tx_rlc_branches.count + 1;
 				count = obj.tx_rlc_branches.count;
-				element.name = [obj.name,'/tx_rlc_', num2str(count)];
+				rlc_element.name = [obj.name,'/tx_rlc_', num2str(count)];
+				voltmeter_element.name = [obj.name,'/tx_volt_', num2str(count)];
+				acquisition_element.name = [obj.name,'/tx_acq_', num2str(count)];
+				acquisition_element.variable = ['tx_acq_', num2str(count)];
 			else
 				obj.rx_rlc_branches.count = obj.rx_rlc_branches.count + 1;
 				count = obj.rx_rlc_branches.count;
-				element.name = [obj.name,'/rx_rlc_', num2str(count)];
+				rlc_element.name = [obj.name,'/rx_rlc_', num2str(count)];
+				voltmeter_element.name = [obj.name,'/rx_volt_', num2str(count)];
+				acquisition_element.name = [obj.name,'/rx_acq_', num2str(count)];
+				acquisition_element.variable = ['rx_acq_', num2str(count)];
 			end
 
 			add_block('powerlib/Elements/Series RLC Branch',...
-				element.name,...
-				'Position', hierarchy.rect ...
+				rlc_element.name,...
+				'Position', hierarchy.children{1}.children{1}.rect ...
 			);
 			
-			set_param(element.name, 'BranchType', 'RC');
+			add_block('powerlib/Measurements/Voltage Measurement',...
+				voltmeter_element.name,...
+				'Position', hierarchy.children{3}.children{2}.rect ...
+			);
 			
-			% for later connection of blocks
-			element.hnd = get_param(element.name,'PortHandles');
+			add_block('simulink/Sinks/To Workspace',...
+				acquisition_element.name,...
+				'Position', hierarchy.children{3}.children{4}.rect ...
+			);
+			
+			set_param(rlc_element.name, 'BranchType', 'RC');
+			set_param(rlc_element.name, 'Measurements', 'Branch voltage');
+			set_param(acquisition_element.name, 'VariableName', acquisition_element.variable);
+			
+			% for the connection of the blocks
+			rlc_element.hnd = get_param(rlc_element.name,'PortHandles');
+			voltmeter_element.hnd = get_param(voltmeter_element.name,'PortHandles');
+			acquisition_element.hnd = get_param(acquisition_element.name,'PortHandles');
+			
+			add_line(obj.name,...
+				rlc_element.hnd.RConn,...
+				voltmeter_element.hnd.LConn(1),...
+				'Autorouting', 'on'...
+			);
+			
+			add_line(obj.name,...
+				rlc_element.hnd.LConn,...
+				voltmeter_element.hnd.LConn(2),...
+				'Autorouting', 'on'...
+			);
+			
+			add_line(obj.name,...
+				voltmeter_element.hnd.Outport,...
+				acquisition_element.hnd.Inport,...
+				'Autorouting', 'on'...
+			);
 			
 			if isTX
-				obj.tx_rlc_branches.elements{count} = element;
+				obj.tx_rlc_branches.components{count} = rlc_element;
+				obj.tx_rlc_branches.voltmeters{count} = voltmeter_element;
+				obj.tx_rlc_branches.acquisitions{count} = acquisition_element;
 			else
-				obj.rx_rlc_branches.elements{count} = element;
+				obj.rx_rlc_branches.components{count} = rlc_element;
+				obj.rx_rlc_branches.voltmeters{count} = voltmeter_element;
+				obj.rx_rlc_branches.acquisitions{count} = acquisition_element;
 			end
 			
 		end
@@ -230,28 +287,48 @@ classdef WPTSystem
 		end
 		
 		% Chargeable battery which supplies the powered device. 
-		function obj = newBattery(obj, SOC, hierarchy)
+		function [hierarchy, obj] = newBattery(obj, SOC, hierarchy)
 			
 			if SOC < 0 || SOC > 100
 				error('Invalid state-of-charge.');
 			end
 			
+			hierarchy = obj.horizontalCut(hierarchy, [0.5, 0.1, 0.4]);
+			
 			obj.batteries.count = obj.batteries.count + 1;
 			
-			element.name = [obj.name,'/bat_', num2str(obj.batteries.count)];
+			bat_element.name = [obj.name,'/bat_', num2str(obj.batteries.count)];
+			acquisition_element.name = [obj.name,'/bat_acq_', num2str(obj.batteries.count)];
+			acquisition_element.variable = ['bat_acq_', num2str(obj.batteries.count)];
 			
 			add_block('electricdrivelib/Extra Sources/Battery',...
-				element.name, ...
-				'Position', hierarchy.rect ...
+				bat_element.name, ...
+				'Position', hierarchy.children{1}.rect ...
 			);
 			
-			set_param(element.name, 'Orientation', 'right');
-			set_param(element.name, 'SOC', num2str(SOC));
+			add_block('simulink/Sinks/To Workspace',...
+				acquisition_element.name,...
+				'Position', hierarchy.children{3}.rect ...
+			);
 			
-			% LConn [1..2]
-			element.hnd = get_param(element.name,'PortHandles');
+			set_param(bat_element.name, 'Orientation', 'right');
+			set_param(bat_element.name, 'SOC', num2str(SOC));
+			set_param(acquisition_element.name, 'VariableName', acquisition_element.variable);
 			
-			obj.batteries.elements{obj.batteries.count} = element;
+			% LConn [1..2], Outport
+			bat_element.hnd = get_param(bat_element.name,'PortHandles');
+			% Inport
+			acquisition_element.hnd = get_param(acquisition_element.name,'PortHandles');
+			
+			% internal connections
+			add_line(obj.name,...
+				bat_element.hnd.Outport,...
+				acquisition_element.hnd.Inport,...
+				'Autorouting', 'on'...
+			);
+			
+			obj.batteries.components{obj.batteries.count} = bat_element;
+			obj.batteries.acquisitions{obj.batteries.count} = acquisition_element;
 		end
 		
 		% Provides interface between the rx rlc ring and the DC internal circuit
@@ -259,11 +336,9 @@ classdef WPTSystem
 			
 			% 3 panels: one for the bridge, the second one for the filter capacitor
 			% and the third one for the isolation diode (here implemented using another
-			% bridge)
-			hierarchy = obj.horizontalCut(hierarchy, [0.4, 0.2, 0.4]);
-			hierarchy.children{1} = obj.addPadding(hierarchy.children{1});
-			hierarchy.children{2} = obj.addPadding(hierarchy.children{2});
-			hierarchy.children{3} = obj.addPadding(hierarchy.children{3});
+			% bridge). 2 other panels used for spacing
+			hierarchy = obj.horizontalCut(hierarchy, [0.34, 0.13, 0.06, 0.13, 0.34]);
+			hierarchy.children{3} = obj.verticalCut(hierarchy.children{3}, [0.35,0.3,0.35]);
 		
 			obj.acdc_converters.count = obj.acdc_converters.count + 1;
 			
@@ -273,16 +348,15 @@ classdef WPTSystem
 			
 			add_block('powerlib/Power Electronics/Universal Bridge',...
 				bridge.name, ...
-				'Position', hierarchy.children{1}.children{1}.rect ...
+				'Position', hierarchy.children{1}.rect ...
 			);
-			hierarchy.children{2}.children{1} = obj.verticalCut(hierarchy.children{2}.children{1}, [0.4,0.2,0.4]);
 			add_block('powerlib/Elements/Series RLC Branch',...
 				filter.name, ...
-				'Position', hierarchy.children{2}.children{1}.children{2}.rect ...
+				'Position', hierarchy.children{3}.children{2}.rect ...
 			);
 			add_block('powerlib/Power Electronics/Universal Bridge',...
 				diode.name, ...
-				'Position', hierarchy.children{3}.children{1}.rect ...
+				'Position', hierarchy.children{5}.rect ...
 			);
 			
 			set_param(bridge.name, 'Arms', '2');
@@ -373,7 +447,7 @@ classdef WPTSystem
 		function obj = changeCouplings(obj)
 			
 			% the mutual induction in a simulated homogeneous system of windings
-			M = 4*pi*1e-6 * obj.coupling_helper.generateMutualInductionMatrix();
+			M = 4*pi*1e-6 * obj.coupling_helper.generateMutualInductionMatrix(obj.nt + obj.nr);
 			
 			% the self-induction of each coil
 			L = CouplingHelper.referenceSelfInductance();
@@ -388,10 +462,10 @@ classdef WPTSystem
 			% achieving resonance using the capacitive reactance
 			C = 1 / ( ( 2 * pi * obj.operating_frequency )^2 * L );
 			for i = 1 : obj.tx_rlc_branches.count
-				set_param(obj.tx_rlc_branches.elements{i}.name, 'Capacitance', num2str(C));
+				set_param(obj.tx_rlc_branches.components{i}.name, 'Capacitance', num2str(C));
 			end
 			for i = 1 : obj.rx_rlc_branches.count
-				set_param(obj.rx_rlc_branches.elements{i}.name, 'Capacitance', num2str(C));
+				set_param(obj.rx_rlc_branches.components{i}.name, 'Capacitance', num2str(C));
 			end
 		end
 		
@@ -401,11 +475,11 @@ classdef WPTSystem
 			end
 			
 			for i = 1 : obj.tx_rlc_branches.count
-				set_param(obj.tx_rlc_branches.elements{i}.name, 'Resistance', num2str(R(i)));
+				set_param(obj.tx_rlc_branches.components{i}.name, 'Resistance', num2str(resistance_vector(i)));
 			end
 			
 			for i = 1 : obj.rx_rlc_branches.count
-				set_param(obj.rx_rlc_branches.elements{i}.name, 'Resistance', num2str(R(obj.nt + i)));
+				set_param(obj.rx_rlc_branches.components{i}.name, 'Resistance', num2str(resistance_vector(obj.nt + i)));
 			end
 		end
 	end
@@ -417,7 +491,7 @@ classdef WPTSystem
 				% connecting the source to the rlc
 				add_line(obj.name,...
 					obj.sources.elements{i}.hnd.LConn,...
-					obj.tx_rlc_branches.elements{i}.hnd.LConn,...
+					obj.tx_rlc_branches.components{i}.hnd.LConn,...
 					'Autorouting', 'on'...
 				);
 				
@@ -430,7 +504,7 @@ classdef WPTSystem
 				
 				% connecting the coil to the rlc
 				add_line(obj.name,...
-					obj.tx_rlc_branches.elements{i}.hnd.RConn,...
+					obj.tx_rlc_branches.components{i}.hnd.RConn,...
 					obj.mutual_coupler.hnd.LConn(i),...
 					'Autorouting', 'on'...
 				);
@@ -438,7 +512,49 @@ classdef WPTSystem
 		end
 		
 		function obj = connectRXComponents(obj)
-			for i = 1 : obj.sources.count
+			for i = 1 : obj.nr
+				
+				add_line(obj.name,...
+					obj.rx_rlc_branches.components{i}.hnd.RConn,...
+					obj.acdc_converters.bridges{i}.hnd.LConn(2),...
+					'Autorouting', 'on'...
+				);
+				
+				add_line(obj.name,...
+					obj.mutual_coupler.hnd.LConn(obj.nt + i),...
+					obj.acdc_converters.bridges{i}.hnd.LConn(1),...
+					'Autorouting', 'on'...
+				);
+				
+				add_line(obj.name,...
+					obj.mutual_coupler.hnd.RConn(obj.nt + i),...
+					obj.rx_rlc_branches.components{i}.hnd.LConn,...
+					'Autorouting', 'on'...
+				);
+				
+				add_line(obj.name,...
+					obj.acdc_converters.diodes{i}.hnd.RConn(1),...
+					obj.consumers.elements{i}.hnd.LConn,...
+					'Autorouting', 'on'...
+				);
+				
+				add_line(obj.name,...
+					obj.acdc_converters.diodes{i}.hnd.RConn(2),...
+					obj.consumers.elements{i}.hnd.RConn,...
+					'Autorouting', 'on'...
+				);
+				
+				add_line(obj.name,...
+					obj.consumers.elements{i}.hnd.LConn,...
+					obj.batteries.components{i}.hnd.LConn(1),...
+					'Autorouting', 'on'...
+				);
+				
+				add_line(obj.name,...
+					obj.consumers.elements{i}.hnd.RConn,...
+					obj.batteries.components{i}.hnd.LConn(2),...
+					'Autorouting', 'on'...
+				);
 				
 			end
 		end
@@ -505,7 +621,7 @@ classdef WPTSystem
 			end
 		end
 		
-		function hierarchy = addPadding(obj, hierarchy)
+		function hierarchy = addPadding(obj, hierarchy, padding)
 			
 			if ~isempty(hierarchy.children)
 				error('Invalid padding insertion');
@@ -516,11 +632,20 @@ classdef WPTSystem
 			w = hierarchy.rect(4) - hierarchy.rect(2);
 					
 			% sub-area
-			child.rect = hierarchy.rect + [h * obj.padding / 2, w * obj.padding / 2,...
-				-h * obj.padding / 2, -w * obj.padding / 2];
+			child.rect = hierarchy.rect + [h * padding / 2, w * padding / 2,...
+				-h * padding / 2, -w * padding / 2];
 			child.children = cell(0); % no children so far
 			
 			hierarchy.children{end + 1} = child;
+		end
+	end
+	
+	% operational methods
+	methods
+		function [result, t] = run(obj)
+			tic;
+			result = sim(obj.name);
+			t = toc;
 		end
 	end
 end
