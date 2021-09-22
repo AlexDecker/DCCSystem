@@ -134,17 +134,17 @@ classdef CouplingHelper
 			legend('reference','test');
 		end
 		
-		function M = generateMutualInductionMatrix(obj)
+		function M = generateMutualInductionMatrix(obj, n_coils)
 			
-			M = zeros(obj.n_coils);
+			M = zeros(n_coils);
 			
-			iid_elements = (obj.n_coils^2 - obj.n_coils) / 2;
+			iid_elements = (n_coils^2 - n_coils) / 2;
 			
 			sample = obj.generateMutualInduction(iid_elements);
 			
 			k = 1;
-			for i = 1 : obj.n_coils
-				for j = i+1 : obj.n_coils
+			for i = 1 : n_coils
+				for j = i+1 : n_coils
 					M(i,j) = sample(k);
 					M(j,i) = sample(k);
 					k = k + 1;

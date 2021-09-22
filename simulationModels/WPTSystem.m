@@ -56,6 +56,7 @@ classdef WPTSystem
 				disp('Using default area information...');
 				top_rect = [0, 0, 1200, 300 * max(nt, nr)];
 			end
+			obj.hierarchy = Hierarchy(top_rect);
 			
 			% block containers setup
 			obj.sources.count = 0;
@@ -83,11 +84,8 @@ classdef WPTSystem
 			obj.batteries.components = cell(obj.nr,1);
 			obj.batteries.acquisitions = cell(obj.nr,1); % data acquisition
 			
-			obj.hierarchy.rect = top_rect;
-			obj.hierarchy.children = cell(0);
-			
 			% dividing the area between tx, coupling, and rx panels
-			obj.hierarchy = obj.horizontalCut(obj.hierarchy, [0.14, 0.2, 0.66]);
+			obj.hierarchy = horizontalCut(obj.hierarchy, [0.14, 0.2, 0.66]);
 			[obj.hierarchy.children{1}, obj] = obj.setupTXSide(obj.hierarchy.children{1});
 			[obj.hierarchy.children{2}, obj] = obj.setupCouplingAbstraction(obj.hierarchy.children{2});
 			[obj.hierarchy.children{3}, obj] = obj.setupRXSide(obj.hierarchy.children{3});
@@ -101,18 +99,18 @@ classdef WPTSystem
 			
 			% cut into equal sub areas
 			distribution = ones(1, obj.nt) / obj.nt;
-			hierarchy = obj.verticalCut(hierarchy, distribution);
+			hierarchy = verticalCut(hierarchy, distribution);
 			
 			% build each circuit
 			for i = 1 : length(hierarchy.children)
-				hierarchy.children{i} = obj.addPadding(hierarchy.children{i}, 0.1);
+				hierarchy.children{i} = addPadding(hierarchy.children{i}, 0.1);
 				[hierarchy.children{i}.children{1}, obj] = obj.buildTXCircuit(hierarchy.children{i}.children{1});
 			end
 			
 		end
 		
 		function [hierarchy, obj] = setupCouplingAbstraction(obj, hierarchy)
-			hierarchy = obj.addPadding(hierarchy, 0.6);
+			hierarchy = addPadding(hierarchy, 0.6);
 			obj = obj.newCoupledInductors(hierarchy.children{1});
 		end
 		
@@ -120,11 +118,11 @@ classdef WPTSystem
 		
 			% cut into equal sub areas
 			distribution = ones(1, obj.nr) / obj.nr;
-			hierarchy = obj.verticalCut(hierarchy, distribution);
+			hierarchy = verticalCut(hierarchy, distribution);
 			
 			% build each circuit
 			for i = 1 : length(hierarchy.children)
-				hierarchy.children{i} = obj.addPadding(hierarchy.children{i}, 0.1);
+				hierarchy.children{i} = addPadding(hierarchy.children{i}, 0.1);
 				[hierarchy.children{i}.children{1}, obj] = obj.buildRXCircuit(hierarchy.children{i}.children{1});
 			end
 			
@@ -132,29 +130,29 @@ classdef WPTSystem
 		
 		function [hierarchy, obj] = buildTXCircuit(obj, hierarchy)
 			
-			hierarchy = obj.verticalCut(hierarchy, [0.2, 0.23, 0.02, 0.37, 0.18]);
+			hierarchy = verticalCut(hierarchy, [0.2, 0.23, 0.02, 0.37, 0.18]);
 			
-			hierarchy.children{2} = obj.horizontalCut(hierarchy.children{2}, [0.3, 0.7]);
+			hierarchy.children{2} = horizontalCut(hierarchy.children{2}, [0.3, 0.7]);
 			obj = obj.newSource(hierarchy.children{2}.children{1});
 			
-			hierarchy.children{4} = obj.horizontalCut(hierarchy.children{4}, [0.2, 0.8]);
+			hierarchy.children{4} = horizontalCut(hierarchy.children{4}, [0.2, 0.8]);
 			[hierarchy.children{4}.children{2}, obj] = obj.newRC(true, hierarchy.children{4}.children{2});
 			
 		end
 		
 		function [hierarchy, obj] = buildRXCircuit(obj, hierarchy)
 			% 2 vertical spacers
-			hierarchy = obj.verticalCut(hierarchy, [0.16,0.61,0.23]);
+			hierarchy = verticalCut(hierarchy, [0.16,0.61,0.23]);
 			
 			% Panels: rc, acdc converter, consumer, battery and 3 spacers
-			hierarchy.children{2} = obj.horizontalCut(hierarchy.children{2}, [0.17,0.04,0.37,0.04,0.03,0.04,0.32]);
+			hierarchy.children{2} = horizontalCut(hierarchy.children{2}, [0.17,0.04,0.37,0.04,0.03,0.04,0.32]);
 			
-			hierarchy.children{2}.children{1} = obj.verticalCut(hierarchy.children{2}.children{1}, [0.2, 0.65, 0.15]);
+			hierarchy.children{2}.children{1} = verticalCut(hierarchy.children{2}.children{1}, [0.2, 0.65, 0.15]);
 			[hierarchy.children{2}.children{1}.children{2}, obj] = obj.newRC(false, hierarchy.children{2}.children{1}.children{2});
 			
 			[hierarchy.children{2}.children{3}, obj] = obj.newACDCConverter(hierarchy.children{2}.children{3});
 			
-			hierarchy.children{2}.children{5} = obj.verticalCut(hierarchy.children{2}.children{5}, [0.35,0.3,0.35]);
+			hierarchy.children{2}.children{5} = verticalCut(hierarchy.children{2}.children{5}, [0.35,0.3,0.35]);
 			obj = obj.newPoweredDevice(hierarchy.children{2}.children{5}.children{2});
 			
 			[hierarchy.children{2}.children{7}, obj] = obj.newBattery(0, hierarchy.children{2}.children{7});
@@ -190,9 +188,9 @@ classdef WPTSystem
 		% used in both TX and RX (one for each circuit)
 		function [hierarchy, obj] = newRC(obj, isTX, hierarchy)
 			
-			hierarchy = obj.verticalCut(hierarchy, [0.16, 0.37, 0.47]);
-			hierarchy.children{1} = obj.horizontalCut(hierarchy.children{1}, [0.53, 0.47]);
-			hierarchy.children{3} = obj.horizontalCut(hierarchy.children{3}, [0.11, 0.32, 0.25, 0.32]);
+			hierarchy = verticalCut(hierarchy, [0.16, 0.37, 0.47]);
+			hierarchy.children{1} = horizontalCut(hierarchy.children{1}, [0.53, 0.47]);
+			hierarchy.children{3} = horizontalCut(hierarchy.children{3}, [0.11, 0.32, 0.25, 0.32]);
 			
 			if isTX
 				obj.tx_rlc_branches.count = obj.tx_rlc_branches.count + 1;
@@ -293,7 +291,7 @@ classdef WPTSystem
 				error('Invalid state-of-charge.');
 			end
 			
-			hierarchy = obj.horizontalCut(hierarchy, [0.5, 0.1, 0.4]);
+			hierarchy = horizontalCut(hierarchy, [0.5, 0.1, 0.4]);
 			
 			obj.batteries.count = obj.batteries.count + 1;
 			
@@ -337,8 +335,8 @@ classdef WPTSystem
 			% 3 panels: one for the bridge, the second one for the filter capacitor
 			% and the third one for the isolation diode (here implemented using another
 			% bridge). 2 other panels used for spacing
-			hierarchy = obj.horizontalCut(hierarchy, [0.34, 0.13, 0.06, 0.13, 0.34]);
-			hierarchy.children{3} = obj.verticalCut(hierarchy.children{3}, [0.35,0.3,0.35]);
+			hierarchy = horizontalCut(hierarchy, [0.34, 0.13, 0.06, 0.13, 0.34]);
+			hierarchy.children{3} = verticalCut(hierarchy.children{3}, [0.35,0.3,0.35]);
 		
 			obj.acdc_converters.count = obj.acdc_converters.count + 1;
 			
@@ -557,86 +555,6 @@ classdef WPTSystem
 				);
 				
 			end
-		end
-	end
-	
-	% hierarchical division of the circuit area
-	methods
-		function hierarchy = horizontalCut(obj, hierarchy, distribution)
-			
-			if sum(distribution) <= 0 || ~isempty(hierarchy.children)
-				error('Invalid cut');
-			end
-			
-			distribution = distribution / sum(distribution);
-			
-			% top walking dimension
-			w = hierarchy.rect(3) - hierarchy.rect(1);
-			
-			% horizontal cut point
-			w_start = hierarchy.rect(1);
-			
-			for i = 1 : length(distribution)
-				
-				% horizontal cut point (end)
-				w_end = w_start + distribution(i) * w;
-				
-				% sub-area
-				child.rect = [w_start, hierarchy.rect(2), w_end, hierarchy.rect(4)];
-				child.children = cell(0);
-				
-				hierarchy.children{end + 1} = child;
-				
-				w_start = w_end;
-			end
-		end
-		
-		function hierarchy = verticalCut(obj, hierarchy, distribution)
-			
-			if sum(distribution) <= 0 || ~isempty(hierarchy.children)
-				error('Invalid cut');
-			end
-			
-			distribution = distribution / sum(distribution);
-			
-			% top walking dimension
-			h = hierarchy.rect(4) - hierarchy.rect(2);
-			
-			% vertical cut point
-			h_start = hierarchy.rect(2);
-			
-			for i = 1 : length(distribution)
-				
-				% vertical cut point (end)
-				h_end = h_start + distribution(i) * h;
-				
-				% sub-area
-				child.rect = [hierarchy.rect(1), h_start, hierarchy.rect(3), h_end];
-				child.children = cell(0); % no children so far
-				
-				% new child-area
-				hierarchy.children{end + 1} = child;
-				
-				h_start = h_end;
-			end
-		end
-		
-		function hierarchy = addPadding(obj, hierarchy, padding)
-			
-			if ~isempty(hierarchy.children)
-				error('Invalid padding insertion');
-			end
-			
-			% top dimensions
-			h = hierarchy.rect(3) - hierarchy.rect(1);
-			w = hierarchy.rect(4) - hierarchy.rect(2);
-					
-			% sub-area
-			child.rect = hierarchy.rect + [h * padding / 2, w * padding / 2,...
-				-h * padding / 2, -w * padding / 2];
-			child.children = cell(0); % no children so far
-			
-			hierarchy.children{end + 1} = child;
 		end
 	end
 	
