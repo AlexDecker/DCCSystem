@@ -7,7 +7,7 @@ classdef Source
 		voltage
 	end
 	methods
-		function [source, hierarchy] = Source(systemName, hierarchy, index)
+		function source = Source(systemName, hierarchy, index)
 			% circuit area division
 			hierarchy = horizontalCut(hierarchy, [0.25,0.125,0.25,0.125,0.25]);
 			hierarchy.children{1} = verticalCut(hierarchy.children{1}, [0.7,0.3]);

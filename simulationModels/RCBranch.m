@@ -7,7 +7,7 @@ classdef RCBranch
 		resistance
 	end
 	methods
-		function [rc, hierarchy] = RCBranch(systemName, hierarchy, prefix, index)
+		function rc = RCBranch(systemName, hierarchy, prefix, index)
 			% circuit area division
 			hierarchy = verticalCut(hierarchy, [0.33,0.33,0.34]);
 			hierarchy.children{1} = horizontalCut(hierarchy.children{1}, [0.2,0.6,0.2]);
