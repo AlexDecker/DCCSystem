@@ -5,7 +5,7 @@ classdef Battery
 		SOC
 	end
 	methods
-		function [bat, hierarchy] = Battery(systemName, hierarchy, index)
+		function bat = Battery(systemName, hierarchy, index)
 			% circuit area division
 			hierarchy = horizontalCut(hierarchy, [0.5,0.2,0.3]);
 			hierarchy.children{3} = verticalCut(hierarchy.children{3}, [0.35,0.3,0.35]);

@@ -4,7 +4,7 @@ classdef RXAmmeter
 		acquisition
 	end
 	methods
-		function [obj, hierarchy] = RXAmmeter(systemName, hierarchy, index)
+		function obj = RXAmmeter(systemName, hierarchy, index)
 			% circuit area division
 			hierarchy = horizontalCut(hierarchy, [0.4,0.2,0.4]);
 			hierarchy.children{1} = verticalCut(hierarchy.children{1}, [0.6,0.4]);
@@ -43,7 +43,7 @@ classdef RXAmmeter
 		end
 		
 		function hnd = negativeHandler(obj)
-			hnd = obj.component.hnd.RConn;
+			hnd = obj.acquisition.hnd.RConn;
 		end
 	end
 end

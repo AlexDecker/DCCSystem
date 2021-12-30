@@ -4,7 +4,7 @@ classdef Transmitter
         rc
 	end
 	methods
-		function [obj, hierarchy] = Transmitter(systemName, hierarchy, index)
+		function obj = Transmitter(systemName, hierarchy, index)
 			% circuit area division
 			hierarchy = verticalCut(hierarchy, [0.5,0.1,0.4]);
             hierarchy.children{1} = horizontalCut(hierarchy.children{1}, [0.8,0.2]);

@@ -6,11 +6,11 @@ classdef Load
 		resistance
 	end
 	methods
-		function [load, hierarchy] = Load(systemName, hierarchy, index)
+		function load = Load(systemName, hierarchy, index)
 			% circuit area division
 			hierarchy = horizontalCut(hierarchy, [0.15,0.05,0.3,0.2,0.3]);
 			hierarchy.children{1} = verticalCut(hierarchy.children{1}, [0.2,0.3,0.5]);
-			hierarchy.children{3} = verticalCut(hierarchy.children{3}, [0.5,0.3,0.2]);
+			hierarchy.children{3} = verticalCut(hierarchy.children{3}, [0.6,0.3,0.1]);
 			hierarchy.children{5} = verticalCut(hierarchy.children{5}, [0.3,0.3,0.4]);
 			
 			% building sub-components

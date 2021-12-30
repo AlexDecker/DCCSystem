@@ -1,19 +1,15 @@
 clc;
 clear all;
 
-nt = 1;
-nr = 1;
+name = 'wpt';
+new_system(name);
+open_system(name);
 
-model = WPTSystem('wpt', nt, nr, []);
+% solver definitions: default
+add_block('powerlib/powergui',[name, '/powergui']);
+set_param([name, '/powergui'],'SimulationMode','Discrete');
+set_param([name, '/powergui'],'SampleTime','1e-6');
+set_param('wpt', 'MaxStep', '1');
 
-model = model.setVoltages(30*ones(nt,1));
-model = model.setResistances(ones(nt + nr,1));
-
-%[result, t] = model.run();
-%tic;
-%sim('wpt');
-%toc
-
-%who
-
-%model.destroy();
+Transmitter(name, Hierarchy([0,0,200,200]), 0);
+Receiver(name, Hierarchy([200,0,1000,200]), 0);
