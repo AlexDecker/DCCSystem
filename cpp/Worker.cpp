@@ -15,11 +15,11 @@ void Memory::runCycle()
         return;
     }
     
-    ttl = m_sampleSize;
+    int ttl = m_sampleSize;
     while (--ttl && !m_states.full())
     {
         // Random state which is reachable from state at this timeslot
-        NextState nextState(state->charges);
+        const State nextState(state->charges, m_problemParameters, m_timeSlot);
         
         // Store only the next states which generate a substantial contribution
         // to the next FeasibleFuture
