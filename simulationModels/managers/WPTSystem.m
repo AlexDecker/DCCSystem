@@ -1,6 +1,6 @@
 classdef WPTSystem
 	properties
-		name
+		systemName
 		nt % number of transmitters
 		nr % number of receivers
 		
@@ -16,7 +16,12 @@ classdef WPTSystem
 	
 	% setup methods
 	methods
-		function obj = WPTSystem(name, nt, nr, top_rect)
+		% name: name of the system. Must be unique.
+		% nt: number of transmitters. Must be greater or equal than 1.
+		% nr: number of transmitters. Must be greater or equal than 1.
+		% top_rect: simulation area. If empty the default information will be used.
+		% root: the path to the Mutual Inductance references. If empty the pwd will be used.
+		function obj = WPTSystem(name, nt, nr, top_rect, root)
 			obj.nt = nt;
 			obj.nr = nr;
 			
@@ -25,7 +30,7 @@ classdef WPTSystem
 			end
 			
 			% environment setup
-			obj.name = name;
+			obj.systemName = name;
             obj.destroy(); % to guarantee there is no other system with the same name
 			new_system(name);
 			open_system(name);
@@ -48,8 +53,10 @@ classdef WPTSystem
             % (center), and the RX-side circuits (right)
             obj.hierarchy = obj.hierarchy.horizontalCut([0.25, 0.15, 0.6]);
             [obj.hierarchy.children{1}, obj] = obj.setupTXSide(obj.hierarchy.children{1});
-            [obj.hierarchy.children{2}, obj] = obj.setupCouplingAbstraction(obj.hierarchy.children{2});
+            [obj.hierarchy.children{2}, obj] = obj.setupCouplingAbstraction(obj.hierarchy.children{2}, root);
             [obj.hierarchy.children{3}, obj] = obj.setupRXSide(obj.hierarchy.children{3});
+			
+			obj.connectDevices();
 		end
 		
 		function [hierarchy, obj] = setupTXSide(obj, hierarchy)
@@ -66,13 +73,13 @@ classdef WPTSystem
                 % abstraction are shorter on average
                 slot = floor((max_n - obj.nt)/2) + i;
 				hierarchy.children{slot} = addPadding(hierarchy.children{slot}, 0.1);
-				obj.transmitters{end + 1} = Transmitter(obj.name, hierarchy.children{slot}.children{1}, i);
+				obj.transmitters{end + 1} = Transmitter(obj.systemName, hierarchy.children{slot}.children{1}, i);
 			end
 		end
 		
-		function [hierarchy, obj] = setupCouplingAbstraction(obj, hierarchy)
+		function [hierarchy, obj] = setupCouplingAbstraction(obj, hierarchy, root)
 			hierarchy = addPadding(hierarchy, 0.6);
-            obj.coupler = Coupler(obj.name, hierarchy.children{1}, obj.nt, obj.nr);
+            obj.coupler = Coupler(obj.systemName, hierarchy.children{1}, obj.nt, obj.nr, root);
 		end
 		
 		function [hierarchy, obj] = setupRXSide(obj, hierarchy)
@@ -89,13 +96,13 @@ classdef WPTSystem
                 % abstraction are shorter on average
                 slot = floor((max_n - obj.nt)/2) + i;
 				hierarchy.children{slot} = addPadding(hierarchy.children{slot}, 0.1);
-				obj.receivers{end + 1} = Receiver(obj.name, hierarchy.children{slot}.children{1}, i);
+				obj.receivers{end + 1} = Receiver(obj.systemName, hierarchy.children{slot}.children{1}, i);
 			end
 		end
 		
 		function destroy(obj)
 			% close inconditionally
-			bdclose(obj.name);
+			bdclose(obj.systemName);
 		end
 	end
 	
@@ -106,18 +113,49 @@ classdef WPTSystem
 		
 		function obj = setResistances(obj, resistance_vector)
 		end
+		
+		function obj = updateParameters(obj)
+		end
+		
+		function settings = getSettings(obj)
+		end
 	end
 	
 	% connections
 	methods
-		
+		function connectDevices(obj)
+			for (i = 1:obj.nt)
+				add_line(obj.systemName,...
+					obj.transmitters{i}.positiveHandler(),...
+					obj.coupler.txNegativeHandler(i),...
+					'Autorouting', 'on'...
+				);
+				add_line(obj.systemName,...
+					obj.coupler.txPositiveHandler(i),...
+					obj.transmitters{i}.negativeHandler(),...
+					'Autorouting', 'on'...
+				);
+			end
+			for (i = 1:obj.nr)
+				add_line(obj.systemName,...
+					obj.receivers{i}.positiveHandler(),...
+					obj.coupler.rxNegativeHandler(i),...
+					'Autorouting', 'on'...
+				);
+				add_line(obj.systemName,...
+					obj.coupler.rxPositiveHandler(i),...
+					obj.receivers{i}.negativeHandler(),...
+					'Autorouting', 'on'...
+				);
+			end
+		end
 	end
 	
 	% operational methods
 	methods
 		function [result, t] = run(obj)
 			tic;
-			result = sim(obj.name);
+			result = sim(obj.systemName);
 			t = toc;
 		end
 	end

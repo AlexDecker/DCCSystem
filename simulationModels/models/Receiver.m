@@ -62,11 +62,11 @@ classdef Receiver
 		end
 		
 		function hnd = positiveHandler(obj)
-			hnd = obj.source.positiveHandler();
+			hnd = obj.rc.positiveHandler();
 		end
 		
 		function hnd = negativeHandler(obj)
-			hnd = obj.rc.negativeHandler();
+			hnd = obj.ammeter.negativeHandler();
 		end
 	end
 end

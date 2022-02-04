@@ -6,11 +6,11 @@ classdef Coupler
 		coupling_helper % mutual inductance generator
 	end
 	methods
-		function coupler = Coupler(systemName, hierarchy, nt,nr)
+		function coupler = Coupler(systemName, hierarchy, nt, nr, root)
 			coupler.nt = nt;
 			coupler.nr = nr;
 			% local setup (get all coupling references in the pwd)
-			coupler.coupling_helper = CouplingHelper([], false);
+			coupler.coupling_helper = CouplingHelper([], false, root);
 			
 			coupler.mutual_coupler.name = [systemName,'/coupler'];
 
@@ -56,11 +56,11 @@ classdef Coupler
 		end
 		
 		function hnd = rxPositiveHandler(coupler, index)
-			hnd = coupler.mutual_coupler.hnd.RConn(index);
+			hnd = coupler.mutual_coupler.hnd.RConn(coupler.nt + index);
 		end
 		
 		function hnd = rxNegativeHandler(coupler, index)
-			hnd = coupler.mutual_coupler.hnd.LConn(index);
+			hnd = coupler.mutual_coupler.hnd.LConn(coupler.nt + index);
 		end
 	end
 end

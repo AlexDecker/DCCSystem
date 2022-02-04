@@ -13,10 +13,13 @@ classdef CouplingHelper
 		%  references. Cell Array containing the reference matrices
 		%  plot_input. If true, plots the correlation matrix of the reference
 		%		 matrices and the histogram of the mutual inductances.
-		function obj = CouplingHelper(references, plot_input)
+		%  root. Root folder where are the references for the case the cell
+		%		 array is empty. If empty as well, the pwd will be considered
+		%		 instead.
+		function obj = CouplingHelper(references, plot_input, root)
 			
 			if isempty(references)
-				references = obj.loadFromDisk();
+				references = obj.loadFromDisk(root);
 			end
 			
 			sample_size = length(references);
@@ -86,12 +89,12 @@ classdef CouplingHelper
 			end
 		end
 		
-		function references = loadFromDisk(obj)
+		function references = loadFromDisk(obj, root)
 		
 			% loading all availiable neumann-based matrices in this directory
 			n_instances = 0;
 			
-			mat = dir('*.mat');
+			mat = dir([root, '*.mat']);
 			
 			references = cell(length(mat),1);
 			

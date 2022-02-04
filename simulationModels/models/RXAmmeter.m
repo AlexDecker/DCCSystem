@@ -43,7 +43,7 @@ classdef RXAmmeter
 		end
 		
 		function hnd = negativeHandler(obj)
-			hnd = obj.acquisition.hnd.RConn;
+			hnd = obj.ammeter.hnd.RConn;
 		end
 	end
 end
