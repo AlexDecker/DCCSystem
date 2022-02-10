@@ -30,5 +30,33 @@ classdef Transmitter
 		function hnd = negativeHandler(obj)
 			hnd = obj.rc.negativeHandler();
 		end
+		
+		function obj = setVoltage(obj, voltage)
+			obj.source = obj.source.setVoltage(voltage);
+		end
+		
+		function voltage = getVoltage(obj)
+			voltage = obj.source.getVoltage();
+		end
+		
+		function obj = setFrequency(obj, frequency)
+			obj.source = obj.source.setFrequency(frequency);
+		end
+		
+		function frequency = getFrequency(obj)
+			frequency = obj.source.getFrequency();
+		end
+		
+		function obj = setResistance(obj, resistance)
+			obj.rc = obj.rc.setResistance(resistance);
+		end
+		
+		function obj = setCapacitance(obj, capacitance)
+			obj.rc = obj.rc.setCapacitance(capacitance);
+		end
+		
+		function resistance = getResistance(obj)
+			resistance = obj.rc.getResistance();
+		end
 	end
 end

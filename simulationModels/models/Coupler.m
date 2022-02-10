@@ -4,6 +4,7 @@ classdef Coupler
 		nr % #receivers
 		mutual_coupler % block
 		coupling_helper % mutual inductance generator
+		inductances % self/mutual inductance matrix
 	end
 	methods
 		function coupler = Coupler(systemName, hierarchy, nt, nr, root)
@@ -29,8 +30,7 @@ classdef Coupler
 			coupler = coupler.changeCouplings();
 		end
 		
-		% This function generates and applies a new set of mutual inductances. It also generates
-		% the self-inductances and the capacitances in a way to keep the system resonant.
+		% This function generates and applies a new set of mutual inductances.
 		function coupler = changeCouplings(coupler)
 			
 			% the mutual induction in a simulated homogeneous system of windings
@@ -40,11 +40,15 @@ classdef Coupler
 			L = CouplingHelper.referenceSelfInductance();
 			
 			% the complete inductance matrix
-			inductances = -M + L * eye(coupler.nt + coupler.nr);
+			coupler.inductances = -M + L * eye(coupler.nt + coupler.nr);
 			
 			% setting up the ideal inductors
-			set_param(coupler.mutual_coupler.name, 'InductanceMatrix', mat2str(inductances));
+			set_param(coupler.mutual_coupler.name, 'InductanceMatrix', mat2str(coupler.inductances));
 			set_param(coupler.mutual_coupler.name, 'ResistanceMatrix', mat2str(zeros(coupler.nt + coupler.nr)));
+		end
+		
+		function inductances = getInductanceMatrix(coupler)
+			inductances = coupler.inductances;
 		end
 		
 		function hnd = txPositiveHandler(coupler, index)

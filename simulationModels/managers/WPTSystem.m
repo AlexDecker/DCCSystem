@@ -108,16 +108,98 @@ classdef WPTSystem
 	
 	% Runtime settings
 	methods
+		% Set the transmitting voltages
 		function obj = setVoltages(obj, voltage_vector)
+			assert(length(voltage_vector) == obj.nt);
+			for (i = 1:obj.nt)
+				obj.transmitters{i} = obj.transmitters{i}.setVoltage(...
+					voltage_vector(i)...
+				);
+			end
 		end
 		
+		function obj = setFrequency(obj, frequency)
+			assert(length(frequency) == 1);
+			assert(frequency > 0);
+			for (i = 1:obj.nt)
+				obj.transmitters{i} = obj.transmitters{i}.setFrequency(...
+					frequency...
+				);
+			end
+		end
+		
+		% Set fixed resistances of the rlc rings
 		function obj = setResistances(obj, resistance_vector)
+			assert(length(resistance_vector) == obj.nt + obj.nr);
+			assert(sum(resistance_vector <= 0) == 0);
+			for (i = 1:obj.nt)
+				obj.transmitters{i} = obj.transmitters{i}.setResistance(...
+					resistance_vector(i)...
+				);
+			end
+			for (i = 1:obj.nr)
+				obj.receivers{i} = obj.receivers{i}.setResistance(...
+					resistance_vector(obj.nt + i)...
+				);
+			end
 		end
 		
-		function obj = updateParameters(obj)
+		function obj = setConsummerResistances(obj, resistance_vector)
+			assert(length(resistance_vector) == obj.nr);
+			assert(sum(resistance_vector <= 0) == 0);
+			for (i = 1:obj.nr)
+				obj.receivers{i} = obj.receivers{i}.setConsummerResistance(...
+					resistance_vector(i)...
+				);
+			end
+		end
+		
+		% States-of-charge (%)
+		function obj = setSOC(obj, SOC_vector)
+			assert(length(SOC_vector) == obj.nr);
+			assert(sum(SOC_vector < 0 | SOC_vector > 100) == 0);
+			for (i = 1:obj.nr)
+				obj.receivers{i} = obj.receivers{i}.setSOC(SOC_vector(i));
+			end
+		end
+		
+		function obj = changeCouplings(obj)
+			obj.coupler = obj.coupler.changeCouplings();
+			% self inductances
+			L = abs(diag(obj.coupler.getInductanceMatrix()));
+			% operational frequency
+			f = obj.transmitters{1}.getFrequency();
+			% resonance capacitances (2*pi*f*L = 1./(2*pi*f*C))
+			C = 1./(4*pi^2*f^2*L);
+			
+			for (i = 1:obj.nt)
+				obj.transmitters{i} = obj.transmitters{i}.setCapacitance(C(i));
+			end
+			for (i = 1:obj.nr)
+				obj.receivers{i} = obj.receivers{i}.setCapacitance(C(obj.nt+i));
+			end
 		end
 		
 		function settings = getSettings(obj)
+			% creating the structure to store the circuit data
+			settings.voltages = zeros(obj.nt, 1);
+			settings.internalImpedance = zeros(obj.nt + obj.nt, 1);
+		    settings.SOC = zeros(obj.nt, 1);
+		    settings.M = obj.coupler.getInductanceMatrix();
+			settings.f = obj.transmitters{1}.getFrequency();
+		    settings.RL = zeros(obj.nt, 1);
+			
+			% transmitter-wise data
+			for (i = 1:obj.nt)
+				settings.voltages(i) = obj.transmitters{i}.getVoltage();
+				settings.internalImpedance(i) = obj.transmitters{i}.getResistance();
+			end
+			% receiver-wise data
+			for (i = 1:obj.nr)
+				settings.internalImpedance(obj.nt + i) = obj.receivers{i}.getResistance();
+				settings.SOC(i) = obj.receivers{i}.getSOC();
+				settings.RL(i) = obj.receivers{i}.getConsummerResistance();
+			end
 		end
 	end
 	

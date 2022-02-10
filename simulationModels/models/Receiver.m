@@ -68,5 +68,33 @@ classdef Receiver
 		function hnd = negativeHandler(obj)
 			hnd = obj.ammeter.negativeHandler();
 		end
+		
+		function obj = setResistance(obj, resistance)
+			obj.rc = obj.rc.setResistance(resistance);
+		end
+		
+		function resistance = getResistance(obj)
+			resistance = obj.rc.getResistance();
+		end
+		
+		function obj = setCapacitance(obj, capacitance)
+			obj.rc = obj.rc.setCapacitance(capacitance);
+		end
+		
+		function obj = setConsummerResistance(obj, resistance)
+			obj.load = obj.load.setResistance(resistance);
+		end
+		
+		function resistance = getConsummerResistance(obj)
+			resistance = obj.load.getResistance();
+		end
+		
+		function obj = setSOC(obj, SOC)
+			obj.battery = obj.battery.setSOC(SOC);
+		end
+		
+		function SOC = getSOC(obj)
+			SOC = obj.battery.getSOC();
+		end
 	end
 end

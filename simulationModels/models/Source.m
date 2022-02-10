@@ -3,7 +3,9 @@ classdef Source
 		component
 		ammeter
 		acquisition
-		angularFrequency
+		
+		% params
+		frequency
 		voltage
 	end
 	methods
@@ -70,13 +72,13 @@ classdef Source
 			voltage = source.voltage;
 		end
 		
-		function source = setAngularFrequency(source, angularFrequency)
-			set_param(source.component.name, 'Frequency', num2str(angularFrequency));
-			source.angularFrequency = angularFrequency;
+		function source = setFrequency(source, frequency)
+			set_param(source.component.name, 'Frequency', num2str(frequency));
+			source.frequency = frequency;
 		end
 		
-		function angularFrequency = getAngularFrequency(source)
-			angularFrequency = source.angularFrequency;
+		function frequency = getFrequency(source)
+			frequency = source.frequency;
 		end
 	end
 end
