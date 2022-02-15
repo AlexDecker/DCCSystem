@@ -1,5 +1,5 @@
 classdef Source
-	properties (Access = private)
+	properties (SetAccess = private)
 		component
 		ammeter
 		acquisition

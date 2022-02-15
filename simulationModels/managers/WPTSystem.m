@@ -34,13 +34,14 @@ classdef WPTSystem
             obj.destroy(); % to guarantee there is no other system with the same name
 			new_system(name);
 			open_system(name);
+			set_param(name,'StartTime', '0.0');
+			set_param(name,'StopTime', '0.5');
 			
 			% solver definitions: default
 			add_block('powerlib/powergui',[name, '/powergui']);
-			%set_param([name, '/powergui'],'SimulationMode','Continuous');
 			set_param([name, '/powergui'],'SimulationMode','Discrete');
-			set_param([name, '/powergui'],'SampleTime','1e-6');
-			set_param('wpt', 'MaxStep', '1');
+			set_param([name, '/powergui'],'SampleTime','1e-7');
+			%set_param('wpt', 'MaxStep', '1');
 			
 			% topological hierarchy
 			if isempty(top_rect) || top_rect(1) <= top_rect(3) || top_rect(2) <= top_rect(4)
@@ -235,10 +236,86 @@ classdef WPTSystem
 	
 	% operational methods
 	methods
-		function [result, t] = run(obj)
+		function [result, t] = run(obj, plotData)
 			tic;
-			result = sim(obj.systemName);
+			sim(obj.systemName);
 			t = toc;
+			
+			result.txData = cell(0);
+			result.rxData = cell(0);
+			
+			for i = 1:obj.nr
+				acqName = obj.receivers{i}.getLoadCurrentAcquisition();
+				acq = eval(acqName);
+				data.loadCurrent = [acq.Time, acq.Data];
+				clear acqName;
+				
+				acqName = obj.receivers{i}.getReceivingCurrentAcquisition();
+				acq = eval(acqName);
+				data.current = [acq.Time, acq.Data];
+				clear acqName;
+				
+				acqName = obj.receivers{i}.getReceivingVoltageAcquisition();
+				acq = eval(acqName);
+				data.voltage = [acq.Time, acq.Data];
+				clear acqName;
+				
+				acqName = obj.receivers{i}.getBatteryAcquisition();
+				acq = eval(acqName);
+				data.soc = [acq.SOC____.Time, acq.SOC____.Data];
+				data.batVoltage = [acq.Voltage__V_.Time, acq.Voltage__V_.Data];
+				data.batCurrent = [acq.Current__A_.Time, acq.Current__A_.Data];
+				clear acq;
+				
+				result.rxData{end+1} = data;
+			end
+			
+			for i = 1:obj.nt
+				acqName = obj.transmitters{i}.getTransmittingVoltageAcquisition();
+				acq = eval(acqName);
+				data.voltage = [acq.Time, acq.Data];
+				clear acqName;
+
+				acqName = obj.transmitters{i}.getTransmittingCurrentAcquisition();
+				acq = eval(acqName);
+				data.current = [acq.Time, acq.Data];
+				clear acqName;
+				
+				result.txData{end+1} = data;
+			end
+			
+			if plotData
+				for i = 1:obj.nr
+					figure;
+					plot(result.rxData{i}.loadCurrent(:,1), result.rxData{i}.loadCurrent(:,2));
+					title(['Load Currents (',num2str(i),')']);
+					figure;
+					plot(result.rxData{i}.current(:,1), result.rxData{i}.current(:,2));
+					title(['RX Currents (',num2str(i),')']);
+					figure;
+					plot(result.rxData{i}.voltage(:,1), result.rxData{i}.voltage(:,2));
+					title(['RX RC Voltages (',num2str(i),')']);
+					figure;
+					plot(result.rxData{i}.soc(:,1), result.rxData{i}.soc(:,2));
+					title(['SOC (',num2str(i),')']);
+					figure;
+					plot(result.rxData{i}.batVoltage(:,1), result.rxData{i}.batVoltage(:,2));
+					title(['Bat Voltages (',num2str(i),')']);
+					figure;
+					plot(result.rxData{i}.batCurrent(:,1), result.rxData{i}.batCurrent(:,2));
+					title(['Bat Currents (',num2str(i),')']);
+				end
+				
+				for i = 1:obj.nt
+					figure;
+					plot(result.txData{i}.voltage(:,1), result.txData{i}.voltage(:,2));
+					title(['TX RC Voltages (',num2str(i),')']);
+					figure;
+					plot(result.txData{i}.current(:,1), result.txData{i}.current(:,2));
+					title(['TX Currents (',num2str(i),')']);
+				end
+			end
+			
 		end
 	end
 end

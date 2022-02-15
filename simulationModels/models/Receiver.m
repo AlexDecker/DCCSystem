@@ -96,5 +96,24 @@ classdef Receiver
 		function SOC = getSOC(obj)
 			SOC = obj.battery.getSOC();
 		end
+		
+		% get acquisition object names %
+		
+		function acqName = getLoadCurrentAcquisition(obj)
+			acqName = obj.load.acquisition.variable;
+		end
+		
+		function acqName = getReceivingCurrentAcquisition(obj)
+			acqName = obj.ammeter.acquisition.variable;
+		end
+		
+		function acqName = getReceivingVoltageAcquisition(obj)
+			acqName = obj.rc.acquisition.variable;
+		end
+		
+		function acqName = getBatteryAcquisition(obj)
+			acqName = obj.battery.acquisition.variable;
+		end
+		
 	end
 end

@@ -1,5 +1,5 @@
 classdef Battery
-	properties (Access = private)
+	properties (SetAccess = private)
 		component
 		acquisition
 		SOC
@@ -18,6 +18,8 @@ classdef Battery
 			);
 			bat.component.hnd = get_param(bat.component.name,'PortHandles');
 			set_param(bat.component.name, 'Orientation', 'right');
+			% battery response time (s)s
+			set_param('wpt/bat_1','Batt_tr','30');
 			
 			bat.acquisition.name = [systemName, '/bat_acq_', num2str(index)];
 			bat.acquisition.variable = ['bat_acq_', num2str(index)];

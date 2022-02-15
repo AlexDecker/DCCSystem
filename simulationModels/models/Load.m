@@ -1,5 +1,5 @@
 classdef Load
-	properties (Access = private)
+	properties (SetAccess = private)
 		component
 		ammeter
 		acquisition

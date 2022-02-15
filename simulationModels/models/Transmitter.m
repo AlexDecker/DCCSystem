@@ -58,5 +58,15 @@ classdef Transmitter
 		function resistance = getResistance(obj)
 			resistance = obj.rc.getResistance();
 		end
+		
+		% get the name of the acquisition block for the RC voltage		
+		function acqName = getTransmittingVoltageAcquisition(obj)
+			acqName = obj.rc.acquisition.variable;
+		end
+
+		% get the name of the acquisition block for the RLC current
+		function acqName = getTransmittingCurrentAcquisition(obj)
+			acqName = obj.source.acquisition.variable;
+		end
 	end
 end

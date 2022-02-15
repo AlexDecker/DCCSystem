@@ -2,6 +2,7 @@
 % the set converter/battery/consumer in terms only of the state-of-charge and the
 % consuming current (considering the other parameters of the battery are constant)
 
+clear all;
 generateData = true;
 
 if generateData
@@ -30,9 +31,9 @@ if generateData
 	% To process signal readings and calculate the equivalent impedance
 	resMgr = ResistanceAbstractionManager(settings.f);
 	
-	%wpt.run();
+	[result, t] = wpt.run(true);
 
-	%wpt.destroy();
+	wpt.destroy();
 else
 	% Analyze data
 end

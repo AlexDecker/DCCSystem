@@ -1,5 +1,5 @@
 classdef RCBranch
-	properties (Access = private)
+	properties
 		component
 		voltmeter
 		acquisition

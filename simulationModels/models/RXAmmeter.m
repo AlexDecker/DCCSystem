@@ -1,5 +1,5 @@
 classdef RXAmmeter
-	properties (Access = private)
+	properties (SetAccess = private)
 		ammeter
 		acquisition
 	end
