@@ -37,10 +37,13 @@ classdef Coupler
 			M = 4*pi*1e-6 * coupler.coupling_helper.generateMutualInductionMatrix(coupler.nt + coupler.nr);
 			
 			% the self-induction of each coil
-			L = CouplingHelper.referenceSelfInductance();
+			%L = CouplingHelper.referenceSelfInductance();
+			% the minimum allowed inductance (so that the resonant capacitance is
+			% tratable)
+			L = max(max(M)) + 1e-9;
 			
 			% the complete inductance matrix
-			coupler.inductances = -M + L * eye(coupler.nt + coupler.nr);
+			coupler.inductances = M + L * eye(coupler.nt + coupler.nr);
 			
 			% setting up the ideal inductors
 			set_param(coupler.mutual_coupler.name, 'InductanceMatrix', mat2str(coupler.inductances));

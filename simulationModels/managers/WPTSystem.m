@@ -39,9 +39,9 @@ classdef WPTSystem
 			
 			% solver definitions: default
 			add_block('powerlib/powergui',[name, '/powergui']);
-			set_param([name, '/powergui'],'SimulationMode','Discrete');
-			set_param([name, '/powergui'],'SampleTime','1e-7');
-			%set_param('wpt', 'MaxStep', '1');
+			set_param([name, '/powergui'],'SimulationMode','Continuous');
+			%set_param([name, '/powergui'],'SimulationMode','Discrete');
+			%set_param([name, '/powergui'],'SampleTime','1e-7');
 			
 			% topological hierarchy
 			if isempty(top_rect) || top_rect(1) <= top_rect(3) || top_rect(2) <= top_rect(4)

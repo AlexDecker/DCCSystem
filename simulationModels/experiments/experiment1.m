@@ -5,6 +5,8 @@
 clear all;
 generateData = true;
 
+% Tentando o modo contínuo. parece q da certo. o capacitor de ressonância parece ta com um valor muito baixo pra precisão da máquina
+
 if generateData
 	wpt = WPTSystem('wpt', 1, 1, [], 'experiments\ParameterGeneration\');
 
