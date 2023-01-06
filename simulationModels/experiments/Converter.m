@@ -15,11 +15,11 @@
 %%
 %% Using Kirchhoff's voltage law:
 %% 1: -H(IH-IH0)/dt - (QC2 + dt*(IH-IL+IB))/C2 + (QC1 + dt*(IR-IH))/C1 = 0
-%%		<=>  -H/dt*IH + H*IH0/dt - QC2/C2 + dt/C2*IH - dt/C2*IL + dt/C2*IB + QC1/C1 + dt/C1*IR - dt/C1*IH = 0
-%%		<=>  (H/dt - dt/C2 + dt/C1)*IH + (dt/C2)*IL + (-dt/C2)*IB = H*IH0/dt - QC2/C2 + QC1/C1 + dt/C1*IR
+%%		<=>  -H/dt*IH + H*IH0/dt - QC2/C2 - dt/C2*IH + dt/C2*IL - dt/C2*IB + QC1/C1 + dt/C1*IR - dt/C1*IH = 0
+%%      <=>  (H/dt + dt/C2 + dt/C1)*IH + (-dt/C2)*IL + (dt/C2)*IB = H*IH0/dt - QC2/C2 + QC1/C1 + dt*IR/C1
 %% 2: -RL*IL - VL - RB * IB + VB = 0  <=> (0)*IH + (+RL)*IL + (+RB)*IB = VB-VL
 %% 3: -RB*IB + VB - (QC2 + dt*(IH-IL+IB))/C2 = 0 <=> -RB*IB + VB - QC2/C2 + dt/C2*IH - dt/C2*IL + dt/C2*IB = 0
-%%      <=>  (-dt/C2)*IH + (RB-dt/C2)*IB  + (dt/C2)*IL = VB - QC2/C2
+%%      <=>  (-dt/C2)*IH + (dt/C2)*IL + (-RB - dt/C2)*IB = QC2/C2 - VB
 
 classdef Converter
 	properties(Constant)
@@ -66,19 +66,27 @@ classdef Converter
 		
 		% TODO
 		function [A, b] = generateModelCoefficients(IR, H, IH0, C1, QC1, C2, QC2, RL, VL, RB, VB, dt)
-			A = [];
-			B = [];
+			A = [(H/dt + dt/C2 + dt/C1), (-dt/C2), (dt/C2);
+				 0,                      (+RL),    (+RB);
+				 (-dt/C2),               (dt/C2),  (-RB - dt/C2)];
+			b = [(H*IH0/dt - QC2/C2 + QC1/C1 + dt*IR/C1);
+			     (VB-VL);
+				 (QC2/C2 - VB)];
 		end
 		
 		% TODO: fix the assertion failure!!
 		function testModel()
 			[IR, H, IH, IH0, C1, QC1, C2, QC2, RL, VL, IL, RB, VB, IB, dt] = Converter.generateTestInstance();
 			
-			assert(abs(((H/dt - dt/C2 + dt/C1)*IH + (dt/C2)*IL + (-dt/C2)*IB) -...
-				(H*IH0/dt - QC2/C2 + QC1/C1 + dt/C1*IR)) < Converter.tolerance, 'Failed on assertion 1');
+			assert(abs((H/dt + dt/C2 + dt/C1)*IH + (-dt/C2)*IL + (dt/C2)*IB -...
+				(H*IH0/dt - QC2/C2 + QC1/C1 + dt*IR/C1)) < Converter.tolerance, 'Failed on assertion 1');
 			assert(abs(((+RL)*IL + (+RB)*IB) - (VB-VL)) < Converter.tolerance, 'Failed on assertion 2');
-			assert(abs(((-dt/C2)*IH + (RB-dt/C2)*IB  + (dt/C2)*IL) - (VB - QC2/C2)) < Converter.tolerance,...
+			assert(abs((-dt/C2)*IH + (dt/C2)*IL + (-RB - dt/C2)*IB - (QC2/C2 - VB)) < Converter.tolerance,...
 				'Failed on assertion 3');
+			
+			[A, b] = Converter.generateModelCoefficients(IR, H, IH0, C1, QC1, C2, QC2, RL, VL, RB, VB, dt);
+			
+			assert(max(abs(A*[IH;IL;IB]-b)) < Converter.tolerance, 'Failed on assertion 3');
 		end
 	end
 	methods
@@ -97,12 +105,8 @@ classdef Converter
 		% RB: Battery current equivalent resistance.
 		% VB: Battery current equivalent voltage.
 		function o = update(o, IR, RL, VL, RB, VB)
-			A = [(o.H/o.dt + o.dt/o.C1 + o.dt/o.C2), (-o.dt/o.C2), (o.dt/o.C2);
-				 0,                                  RL,           RB;
-				 (o.dt/o.C2),                        (-o.dt/o.C2), (RB + o.dt/o.C2)];
-			I = A\[o.QC1/o.C1 - o.QC2/o.C2 + o.dt/o.C1*IR + o.H/o.dt*o.IH;
-				   VB - VL;
-				   VB - o.QC2/o.C2];
+			[A, b] = Converter.generateModelCoefficients(IR, H, IH0, C1, QC1, C2, QC2, RL, VL, RB, VB, dt);
+			I = A\b;
 			o.IH = I(1);
 			o.IL = I(2);
 			o.IB = I(3);
