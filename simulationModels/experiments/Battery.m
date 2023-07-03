@@ -40,7 +40,7 @@ classdef Battery
 		% Minimal SOC for which this model is expected to work (From 10% to 20% it is expected
 		% to work with 10% error for dynamic scenarios).
 		function m = minSOC()
-			m = 10 + Battery.tolerance;
+			m = Battery.tolerance;
 		end
 		
 		function m = maxSOC()
@@ -78,33 +78,40 @@ classdef Battery
 			% number of parameter samplings spaced by a (nsamples-1)*ic*dt time horizon.
 			nsamples = 46;
 			
+			maxError = 0.1; % maximum multiplicative variation from the constant current.
+			
 			% iteration count between samples.
 			ic = ceil(time_horizon / (dt_hours * (nsamples-1)));
 
 			Qseries = zeros(nsamples, 1);
 			VBseries = zeros(nsamples, 1);
 			sIBseries = zeros(nsamples, 1);
+			IBseries = zeros(nsamples, 1);
 			Itseries = zeros(nsamples, 1);
 			
 			for j = 1:nsamples-1
 				disp(['Processing sample #', num2str(j)]);
+				eIB = IB * (1 + (rand-0.5) * maxError);
 				[Q, It, VB, sIB, ~] = battery.getState();
 				Qseries(j) = Q;
 				VBseries(j) = VB;
 				sIBseries(j) = sIB;
+				IBseries(j) = eIB;
 				Itseries(j) = It;
 				for i = 1:ic
-					battery = battery.update(IB);
+					battery = battery.update(eIB);
 				end
 			end
 			disp(['Processing sample #', num2str(nsamples)]);
+			eIB = IB * (1 + (rand-0.5) * maxError);
 			[Q, It, VB, sIB, ~] = battery.getState();
 			Qseries(nsamples) = Q;
 			VBseries(nsamples) = VB;
 			sIBseries(nsamples) = sIB;
+			IBseries(j) = eIB;
 			Itseries(nsamples) = It;
 			
-			tAxis = Battery.sToHours(linspace(0, time_horizon, nsamples));
+			tAxis = linspace(0, time_horizon, nsamples);
 			
 			if (showChart)
 				figure;
@@ -116,12 +123,13 @@ classdef Battery
 				yyaxis right
 				plot(tAxis, Qseries);
 				plot(tAxis, Itseries);
+				plot(tAxis, IBseries);
 				plot(tAxis, sIBseries);
-				legend('Battery Voltage','Battery Charge', 'Output Current Integral', 'Filtered output current');
+				legend('Battery Voltage','Battery Charge', 'Output Current Integral','Output Current', 'Filtered output current');
 				xlabel('Time (h)')
 				ylabel('(Ah|A)')
 				title('Battery Chart')
-				ylim([min(IB, battery.minCharge()) max(IB, battery.maxCharge())]);
+				ylim([1.5*min(-abs(IB), battery.minCharge()) 1.5*max(abs(IB), battery.maxCharge())]);
 			end
 		end
 		
@@ -136,7 +144,7 @@ classdef Battery
 			Battery.simulateForConstantCurrent(battery, time_horizon, IB, showChart);
 			
 			%Charging the battery:
-			Q = 20; %initial SoC percentage
+			Q = Battery.minSOC(); %initial SoC percentage
 			IB = -1; %constant charge current of 1A
 			time_horizon = 2.3625; %simulation time in hours
 			battery = Battery.defaultBattery(dt_seconds, Q, IB);
@@ -154,7 +162,7 @@ classdef Battery
 		end
 		
 		function q = instantaneousCharge(o)
-			q = o.Q0 - o.extractedCharge;
+			q = o.Qt - o.extractedCharge;
 		end
 		
 		function sanityCheck(o)
@@ -166,8 +174,8 @@ classdef Battery
 		% NOTE: this is a const function. Using the returning values to update the internal state in the
 		%	    external scope to avoid rewritting the whole Battery object.
 		function extractedCharge = limitExtractedCharge(o)
-			minExtractedCharge = o.Q0 - o.maxCharge();
-			maxExtractedCharge = o.Q0 - o.minCharge();
+			minExtractedCharge = o.Qt - o.maxCharge();
+			maxExtractedCharge = o.Qt - o.minCharge();
 			if (o.extractedCharge > maxExtractedCharge)
 				extractedCharge = maxExtractedCharge;
 			else
@@ -177,7 +185,6 @@ classdef Battery
 					extractedCharge = o.extractedCharge;
 				end
 			end
-			
 		end
 		
 		% Uses a sliding window of the last measured currents. The time correspondence of the
@@ -196,7 +203,7 @@ classdef Battery
 		
 		% Creates a new battery model and iterates the first step.
 		% dt_seconds: integration step, in seconds.
-		% SOC: initial state-of-charge (10-100%)
+		% SOC: initial state-of-charge (0-100%)
 		% IB: initial output current.
 		% The remaining args are the same as specified in attribute block.
 		function o = Battery(dt_seconds, E0, Kc, Kr, Qt, SOC, A, B, Ri, IB)
@@ -205,7 +212,7 @@ classdef Battery
 			assert(Kc > 0);
 			assert(Kr > 0);
 			assert(Qt > 0);
-			assert(SOC >= Battery.minSOC() && SOC < 100);
+			assert(SOC >= Battery.minSOC() && SOC <= Battery.maxSOC());
 			assert(A > 0);
 			assert(B > 0);
 			assert(Ri > 0);
@@ -217,16 +224,21 @@ classdef Battery
 			o.Kr = Kr;
 			o.Qt = Qt;
 			o.Q0 = Battery.socToCharge(SOC, Qt);
-			o.extractedCharge = Qt - o.Q0;
-			o.extractedCharge = o.limitExtractedCharge();
 			o.A = A;
 			o.B = B;
 			o.E0 = E0;
+			
+			o.extractedCharge = Qt - o.Q0;
+			o.extractedCharge = o.limitExtractedCharge();
+			
+			% Starting as 0 just like the reference paper.
 			o.filteredOutputCurrent = 0;
+
 			assert(Battery.slidingWindowMinSize >= 2);
 			slidingWindowSize = min(Battery.slidingWindowMinSize, ...
 								    ceil(Battery.timeConstant / dt_seconds));
 			o.currentSlidingWindow = zeros(slidingWindowSize,1);
+
 			o = o.update(IB);
 		end
 		
