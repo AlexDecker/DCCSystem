@@ -11,7 +11,15 @@ classdef Load
 	end
 	methods(static)
 		function o = staticLoad(power, dt, timeHorizonLength)
-			
+			assert(power >= 0);
+			assert(dt > 0);
+			assert(timeHorizonLength > dt);
+			powerTimeLine = zeros(4, 2);
+			% times
+			powerTimeLine(:, 1) = linspace(0, timeHorizonLength, 4).';
+			% powers (0 + power)
+			powerTimeLine(:, 2) = powerTimeLine(:, 2) + power;
+			o = Load(powerTimeLine, dt);
 		end
 		
 		% Creates a random timeline based on user specifications.
@@ -28,11 +36,11 @@ classdef Load
 			assert(timeHorizonLength > dt);
 			assert(nPoints >= 4);
 			powerTimeLine = zeros(nPoints, 2);
-			powerTimeLine(:, 1) = rand(nPoints, 1
+			% random times
+			powerTimeLine(:, 1) = timeHorizonLength*rand(nPoints, 1);
+			% random powers
+			powerTimeLine(:, 2) = (maxPower-minPower)*rand(nPoints, 1) + minPower;
 			o = Load(powerTimeLine, dt);
-		end
-		
-		function o = defaultLoad(dt)
 		end
 	end
 	methods

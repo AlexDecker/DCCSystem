@@ -64,7 +64,6 @@ classdef Converter
 			assert(abs(-RB*IB + VB - (QC2 + dt*(IH-IL+IB))/C2) < Converter.tolerance);
 		end
 		
-		% TODO
 		function [A, b] = generateModelCoefficients(IR, H, IH0, C1, QC1, C2, QC2, RL, VL, RB, VB, dt)
 			A = [(H/dt + dt/C2 + dt/C1), (-dt/C2), (dt/C2);
 				 0,                      (+RL),    (+RB);
@@ -74,7 +73,6 @@ classdef Converter
 				 (QC2/C2 - VB)];
 		end
 		
-		% TODO: fix the assertion failure!!
 		function testModel()
 			[IR, H, IH, IH0, C1, QC1, C2, QC2, RL, VL, IL, RB, VB, IB, dt] = Converter.generateTestInstance();
 			
@@ -87,6 +85,8 @@ classdef Converter
 			[A, b] = Converter.generateModelCoefficients(IR, H, IH0, C1, QC1, C2, QC2, RL, VL, RB, VB, dt);
 			
 			assert(max(abs(A*[IH;IL;IB]-b)) < Converter.tolerance, 'Failed on assertion 3');
+			
+			disp(['SUCCESS for tolerance = ', num2str(Converter.tolerance)]);
 		end
 	end
 	methods
