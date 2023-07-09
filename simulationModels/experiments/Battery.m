@@ -84,7 +84,7 @@ classdef Battery
 			ic = ceil(time_horizon / (dt_hours * (nsamples-1)));
 
 			Qseries = zeros(nsamples, 1);
-			VBseries = zeros(nsamples, 1);
+			VBseries = zeros(nsamples, 6);
 			sIBseries = zeros(nsamples, 1);
 			IBseries = zeros(nsamples, 1);
 			Itseries = zeros(nsamples, 1);
@@ -94,7 +94,7 @@ classdef Battery
 				eIB = IB * (1 + (rand-0.5) * maxError);
 				[Q, It, VB, sIB, ~] = battery.getState();
 				Qseries(j) = Q;
-				VBseries(j) = VB;
+				VBseries(j,:) = VB;
 				sIBseries(j) = sIB;
 				IBseries(j) = eIB;
 				Itseries(j) = It;
@@ -106,7 +106,7 @@ classdef Battery
 			eIB = IB * (1 + (rand-0.5) * maxError);
 			[Q, It, VB, sIB, ~] = battery.getState();
 			Qseries(nsamples) = Q;
-			VBseries(nsamples) = VB;
+			VBseries(nsamples, :) = VB;
 			sIBseries(nsamples) = sIB;
 			IBseries(j) = eIB;
 			Itseries(nsamples) = It;
@@ -116,8 +116,21 @@ classdef Battery
 			if (showChart)
 				figure;
 				hold on;
+				plot(tAxis, VBseries(:,2));
+				plot(tAxis, VBseries(:,3));
+				plot(tAxis, VBseries(:,4));
+				plot(tAxis, VBseries(:,5));
+				plot(tAxis, VBseries(:,6));
+				ylim([-1 3.5])
+				legend('E0','res','pol charge', 'exp', 'pol cur');
+				title('Voltage components')
+				ylabel('time (h)');
+				ylabel('V');
+				
+				figure;
+				hold on;
 				yyaxis left
-				plot(tAxis, VBseries);
+				plot(tAxis, VBseries(:,1));
 				ylabel('(VB)');
 				ylim([0 1.5*battery.E0]);
 				yyaxis right
@@ -259,18 +272,24 @@ classdef Battery
 			% Filtered current, used to avoid errors due to high frequencies.
 			[o.filteredOutputCurrent, o.currentSlidingWindow] = o.updateFilteredCurrent();
 			
-			o.VB = o.E0 - o.Ri*o.outputCurrent ...
+			o.VB = [o.E0 - o.Ri*o.outputCurrent ...
 				 - o.Kc * o.Qt / (o.Qt - o.extractedCharge) * o.extractedCharge ...
 				 + o.A * exp(-o.B*o.extractedCharge);
+				 o.E0;
+				 - o.Ri*o.outputCurrent;
+				 - o.Kc * o.Qt / (o.Qt - o.extractedCharge) * o.extractedCharge;
+				 + o.A * exp(-o.B*o.extractedCharge); 0];
 				
 			if (o.filteredOutputCurrent > 0)
 				% discharge model
-				o.VB = o.VB ...
+				o.VB(1) = o.VB(1) ...
 					 - o.Kr * o.Qt / (o.Qt - o.extractedCharge) * o.filteredOutputCurrent;
+				o.VB(end) = - o.Kr * o.Qt / (o.Qt - o.extractedCharge) * o.filteredOutputCurrent;
 			else
 				% charge model
-				o.VB = o.VB ...
+				o.VB(1) = o.VB(1) ...
 					 - o.Kr * o.Qt / (o.extractedCharge - 0.1*o.Qt) * o.filteredOutputCurrent;
+				o.VB(end) = - o.Kr * o.Qt / (o.extractedCharge - 0.1*o.Qt) * o.filteredOutputCurrent;
 			end
 
 		end
